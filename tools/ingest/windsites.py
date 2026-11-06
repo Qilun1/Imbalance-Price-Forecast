@@ -103,6 +103,28 @@ def run() -> Path:
     return out
 
 
+def coarsen(sites: pd.DataFrame, cell_km: float = 50.0, min_mw: float = 40.0) -> pd.DataFrame:
+    """Merge sites onto a ~cell_km grid (capacity-weighted position), then fold sites below min_mw into
+    their nearest larger site. Keeps the national total; keeps NWP requests small (about 40 points for 50 km, 40 MW)."""
+    lat_deg = cell_km / 111.0
+    lon_deg = cell_km / (111.0 * np.cos(np.radians(64.0)))
+    s = sites.copy()
+    s["cell"] = (np.floor(s["lat"] / lat_deg).astype(int).astype(str) + "_" +
+                 np.floor(s["lon"] / lon_deg).astype(int).astype(str))
+    s["wlat"], s["wlon"] = s["lat"] * s["capacity_mw"], s["lon"] * s["capacity_mw"]
+    g = s.groupby("cell").agg(capacity_mw=("capacity_mw", "sum"), wlat=("wlat", "sum"), wlon=("wlon", "sum")).reset_index()
+    g["lat"], g["lon"] = g["wlat"] / g["capacity_mw"], g["wlon"] / g["capacity_mw"]
+    big, small = g[g["capacity_mw"] >= min_mw].copy(), g[g["capacity_mw"] < min_mw]
+    if big.empty:
+        big, small = g.copy(), g.iloc[0:0]
+    for _, r in small.iterrows():
+        i = ((big["lat"] - r["lat"]) ** 2 + ((big["lon"] - r["lon"]) * 0.44) ** 2).idxmin()
+        big.loc[i, "capacity_mw"] += r["capacity_mw"]
+    big["site_id"] = "c" + big["cell"]
+    big["region"], big["place"] = "coarsened", ""
+    return big[["site_id", "region", "place", "lat", "lon", "capacity_mw"]].round(4).reset_index(drop=True)
+
+
 def load_sites() -> pd.DataFrame:
-    """OSM sites if built, else the coarse v0 list."""
-    return pd.read_csv(OSM_SITES) if OSM_SITES.exists() else v0_sites()
+    """OSM sites (coarsened to ~50 km, about 40 sites) if built, else the coarse v0 list."""
+    return coarsen(pd.read_csv(OSM_SITES)) if OSM_SITES.exists() else v0_sites()

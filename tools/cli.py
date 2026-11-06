@@ -48,7 +48,7 @@ def cmd_ingest(a):
         run()
     elif a.source == "openmeteo":
         from tools.ingest.openmeteo import run
-        run(a.start, a.end, a.models.split(",") if a.models else None)
+        run(a.start, a.end, a.models.split(",") if a.models else None, keep_cache=not a.no_cache)
     elif a.source == "fingrid":
         from tools.ingest.fingrid import run
         run([int(x) for x in a.datasets.split(",")], a.start, a.end)
@@ -164,6 +164,7 @@ def main(argv=None):
     s = sub.add_parser("ingest"); s.add_argument("source", choices=["starter", "windsites", "openmeteo", "fingrid"])
     s.add_argument("--src"); s.add_argument("--start", default="2026-05-30"); s.add_argument("--end", default="2026-11-02T06:00")
     s.add_argument("--models"); s.add_argument("--datasets", default="75")
+    s.add_argument("--no-cache", action="store_true", help="openmeteo: do not keep raw JSON")
     s.set_defaults(f=cmd_ingest)
     sub.add_parser("status").set_defaults(f=cmd_status)
     s = sub.add_parser("features"); s.add_argument("--set", default="v1"); s.set_defaults(f=cmd_features)
