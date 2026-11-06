@@ -1,0 +1,10 @@
+data/
+**/data/
+baseline_output/
+work/
+submission/
+*.parquet
+__pycache__/
+.ipynb_checkpoints/
+*.env
+.secrets/

@@ -1,0 +1,11 @@
+# API keys must never be committed
+.secrets/
+*.env
+# created by baseline.ipynb, not part of the distributed package
+baseline_output/
+# Python bytecode cache
+__pycache__/
+# optional virtual environment (README section 7.1)
+.venv/
+# Data files must not be published (README section 9)
+data/
