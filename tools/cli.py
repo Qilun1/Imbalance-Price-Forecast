@@ -1,0 +1,181 @@
+"""One entry point for the whole pipeline. Run from the repo root:
+
+    uv run python -m tools.cli <command> [options]
+
+Commands
+  ingest starter --src PATH     copy starter data into static_data and load the store
+  status                        what is in the store and in infer_data
+  features [--set v1]           (re)build the cached feature table
+  train --config FILE --mode val|final
+  infer --model NAME --period val|test|all
+  baseline --period val|test    organiser's baseline as model "baseline-<period>"
+  score --model NAME            validation score with the organiser's score.py (vs baseline)
+  export --model NAME --period test|val [--out FILE]   submission CSV + organiser's validator
+  leakage [--n 60]              independent availability-rule check
+  single-run --model NAME --origin TS   print one 10 h forecast
+  pipeline --config FILE        features -> train val -> infer val -> score -> train final
+                                -> infer test -> export -> validate -> leakage
+"""
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+import pandas as pd
+
+from imbalance import forecasts, store
+from imbalance.contract import TEST_FIRST_ORIGIN, VALIDATION_FIRST_ORIGIN, read_origins
+from imbalance.paths import WORK_DIR, ensure_dirs
+
+
+def origins_for(period: str) -> pd.DatetimeIndex:
+    from tools.eval.organiser import templates
+    if period == "all":
+        return origins_for("val").union(origins_for("test"))
+    return read_origins(templates(period)[1])
+
+
+def cmd_ingest(a):
+    if a.source == "starter":
+        from tools.ingest.starter import run
+        run(Path(a.src) if a.src else None)
+    else:
+        sys.exit(f"unknown source {a.source}")
+
+
+def cmd_status(a):
+    with pd.option_context("display.width", 200, "display.max_rows", 200):
+        print(store.summary())
+        try:
+            print(forecasts.models())
+        except Exception as e:  # infer db may not exist yet
+            print(f"infer_data: {e}")
+
+
+def cmd_features(a):
+    from tools.training.feature_table import build_feature_table
+    build_feature_table(a.set)
+
+
+def cmd_train(a):
+    from tools.training.train import train
+    train(Path(a.config), a.mode)
+
+
+def cmd_infer(a):
+    from imbalance.inference import infer
+    from tools.training.feature_table import load_feature_table
+    origins = origins_for(a.period)
+    table = load_feature_table(a.set)
+    out = infer(a.model, origins, features=table.drop(columns=[c for c in table if c.startswith("y_")]))
+    print(f"{a.model}: {out['forecast_origin_utc'].nunique()} origins, {len(out)} rows -> infer_data")
+
+
+def cmd_baseline(a):
+    from tools.eval.baseline import baseline_forecast
+    first = VALIDATION_FIRST_ORIGIN if a.period == "val" else TEST_FIRST_ORIGIN
+    df = baseline_forecast(first, origins_for(a.period))
+    forecasts.write(f"baseline-{a.period}", df)
+    print(f"baseline-{a.period}: {len(df)} rows -> infer_data")
+
+
+def _export(model: str, period: str, out: Path | None) -> Path:
+    from tools.eval.organiser import templates, validate
+    tpl, ori = templates(period)
+    out = out or WORK_DIR / "submissions" / f"{model}_{period}.csv"
+    forecasts.export_submission(model, tpl, out)
+    ok, report = validate(out, ori)
+    print(report.strip().splitlines()[0], "->", out)
+    if not ok:
+        print(report)
+        sys.exit(1)
+    return out
+
+
+def cmd_export(a):
+    _export(a.model, a.period, Path(a.out) if a.out else None)
+
+
+def cmd_score(a):
+    from tools.eval.organiser import score
+    base_dir = WORK_DIR / "scores" / "baseline-val"
+    if not (base_dir / "score_summary.csv").exists():
+        if "baseline-val" not in set(forecasts.models()["model"]):
+            cmd_baseline(argparse.Namespace(period="val"))
+        ok, rep = score(_export("baseline-val", "val", None), base_dir)
+        if not ok:
+            sys.exit(rep)
+    sub = _export(a.model, "val", None)
+    ok, rep = score(sub, WORK_DIR / "scores" / a.model, base_dir / "score_summary.csv")
+    lines = rep.splitlines()
+    start = next((i for i, l in enumerate(lines) if l.startswith("## Overall")), 0)
+    print("\n".join(lines[start:start + 20]))
+    if not ok:
+        sys.exit(1)
+
+
+def cmd_leakage(a):
+    from tools.eval.leakage import check
+    if not check(a.set, a.n):
+        sys.exit(1)
+
+
+def cmd_single_run(a):
+    o = pd.Timestamp(a.origin)
+    o = o.tz_localize("UTC") if o.tzinfo is None else o.tz_convert("UTC")
+    df = forecasts.read(a.model, pd.DatetimeIndex([o]))
+    if df.empty:
+        from imbalance.inference import infer
+        df = infer(a.model, pd.DatetimeIndex([o]))
+    cols = ["delivery_start_utc", "step", "p10", "p50", "p90", "p_up", "p_down", "p_spike_high", "p_spike_low", "top_drivers"]
+    with pd.option_context("display.width", 200, "display.max_rows", 50, "display.float_format", "{:.2f}".format):
+        print(df[cols].to_string(index=False))
+
+
+def cmd_pipeline(a):
+    import yaml
+    name = yaml.safe_load(Path(a.config).read_text())["name"]
+    cmd_features(argparse.Namespace(set=a.set))
+    cmd_train(argparse.Namespace(config=a.config, mode="val"))
+    cmd_infer(argparse.Namespace(model=f"{name}-val", period="val", set=a.set))
+    cmd_score(argparse.Namespace(model=f"{name}-val"))
+    cmd_train(argparse.Namespace(config=a.config, mode="final"))
+    cmd_infer(argparse.Namespace(model=name, period="all", set=a.set))
+    cmd_export(argparse.Namespace(model=name, period="test", out=a.out))
+    cmd_leakage(argparse.Namespace(set=a.set, n=a.n))
+
+
+def main(argv=None):
+    ensure_dirs()
+    p = argparse.ArgumentParser(prog="tools.cli", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    s = sub.add_parser("ingest"); s.add_argument("source", choices=["starter"]); s.add_argument("--src")
+    s.set_defaults(f=cmd_ingest)
+    sub.add_parser("status").set_defaults(f=cmd_status)
+    s = sub.add_parser("features"); s.add_argument("--set", default="v1"); s.set_defaults(f=cmd_features)
+    s = sub.add_parser("train"); s.add_argument("--config", required=True)
+    s.add_argument("--mode", choices=["val", "final"], required=True); s.set_defaults(f=cmd_train)
+    s = sub.add_parser("infer"); s.add_argument("--model", required=True)
+    s.add_argument("--period", choices=["val", "test", "all"], default="all"); s.add_argument("--set", default="v1")
+    s.set_defaults(f=cmd_infer)
+    s = sub.add_parser("baseline"); s.add_argument("--period", choices=["val", "test"], default="val")
+    s.set_defaults(f=cmd_baseline)
+    s = sub.add_parser("score"); s.add_argument("--model", required=True); s.set_defaults(f=cmd_score)
+    s = sub.add_parser("export"); s.add_argument("--model", required=True)
+    s.add_argument("--period", choices=["val", "test"], default="test"); s.add_argument("--out")
+    s.set_defaults(f=cmd_export)
+    s = sub.add_parser("leakage"); s.add_argument("--set", default="v1"); s.add_argument("--n", type=int, default=60)
+    s.set_defaults(f=cmd_leakage)
+    s = sub.add_parser("single-run"); s.add_argument("--model", required=True); s.add_argument("--origin", required=True)
+    s.set_defaults(f=cmd_single_run)
+    s = sub.add_parser("pipeline"); s.add_argument("--config", required=True); s.add_argument("--set", default="v1")
+    s.add_argument("--out"); s.add_argument("--n", type=int, default=60); s.set_defaults(f=cmd_pipeline)
+
+    a = p.parse_args(argv)
+    a.f(a)
+
+
+if __name__ == "__main__":
+    main()
