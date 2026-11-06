@@ -5,7 +5,7 @@
   "p_none": 0.001670843776106934,
   "train_rows": 119700,
   "train_last_delivery_utc": "2026-10-04T20:45:00Z",
-  "trained_at_utc": "2026-11-06T20:51:27Z",
+  "trained_at_utc": "2026-11-06T22:01:32Z",
   "config": {
     "name": "lgbm_v1",
     "feature_set": "v1",

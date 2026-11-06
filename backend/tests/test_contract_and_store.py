@@ -76,3 +76,31 @@ def test_openmeteo_parse(monkeypatch):
     assert set(df["location_id"]) == {"a", "b"}
     assert (df["first_usable_origin_utc"] == pd.Timestamp("2026-10-01T07:00Z")).all()
     assert (df["first_usable_origin_utc"] > df["run_init_utc"]).all()
+
+
+def test_latest_index_skips_gaps():
+    """A missing row must not make the 'latest usable row' lookup fall back to an older row."""
+    from imbalance.features import Store
+    t = pd.date_range("2026-06-01", periods=6, freq="15min", tz="UTC")
+    rows = pd.DataFrame({"series_id": "x", "source": "t", "dataset_id": "", "timestamp_utc": t,
+                         "value": np.arange(6.0), "unit": "u",
+                         "first_usable_origin_utc": t + pd.Timedelta(hours=1)}).drop(index=2)   # gap at row 2
+    st = Store(rows)
+    o = pd.DatetimeIndex([t[4] + pd.Timedelta(hours=1)]).as_unit("ns").asi8
+    assert st.latest_index("x", o)[0] == 4
+    o_early = pd.DatetimeIndex([t[0]]).as_unit("ns").asi8
+    assert st.latest_index("x", o_early)[0] == -1
+
+
+@needs_store
+def test_export_sums_exact(tmp_path):
+    """Exported direction probabilities sum to exactly 1 (as written), spikes to <= 1."""
+    from imbalance import forecasts
+    if "lgbm_v1" not in set(forecasts.models()["model"]):
+        pytest.skip("no lgbm_v1 forecasts")
+    out = forecasts.export_submission("lgbm_v1", contract.TEMPLATE, tmp_path / "s.csv")
+    df = pd.read_csv(out, dtype=str)
+    from decimal import Decimal
+    sums = [Decimal(a) + Decimal(b) + Decimal(c) for a, b, c in zip(df.p_up, df.p_down, df.p_none)]
+    assert all(s == Decimal("1") for s in sums)
+    assert (df.p_spike_high.astype(float) + df.p_spike_low.astype(float) <= 1.0 + 1e-12).all()

@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import duckdb
+import numpy as np
 import pandas as pd
 
 from .contract import FORECAST_COLUMNS, TEMPLATE, submission_columns
@@ -104,8 +105,18 @@ def export_submission(model: str, template: Path, out: Path, path: Path = INFER_
     if merged[FORECAST_COLUMNS].isna().any().any():
         n = int(merged["p50"].isna().sum())
         raise RuntimeError(f"{n} template rows have no forecast for model {model!r}")
+    # probabilities: 6 decimals, p_down written as the exact complement so the three sum to 1 exactly
+    for c in ("p_up", "p_none", "p_spike_high", "p_spike_low"):
+        merged[c] = merged[c].round(6)
+    merged["p_down"] = (1.0 - merged["p_up"] - merged["p_none"]).round(6)
+    over = merged["p_spike_high"] + merged["p_spike_low"] > 1.0
+    merged.loc[over, "p_spike_low"] = (1.0 - merged.loc[over, "p_spike_high"]).round(6)
+    for c in ("p10", "p50", "p90"):
+        merged[c] = merged[c].round(4)
+    assert (merged["p10"] <= merged["p50"]).all() and (merged["p50"] <= merged["p90"]).all()
+    assert merged[FORECAST_COLUMNS].notna().all().all() and np.isfinite(merged[FORECAST_COLUMNS].to_numpy()).all()
     out.parent.mkdir(parents=True, exist_ok=True)
-    merged[cols].to_csv(out, index=False, float_format="%.4f", lineterminator="\n", encoding="utf-8")
+    merged[cols].to_csv(out, index=False, float_format="%.6f", lineterminator="\n", encoding="utf-8")
     return out
 
 

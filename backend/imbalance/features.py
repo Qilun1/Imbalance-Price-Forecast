@@ -62,10 +62,15 @@ class Store:
         return np.where(usable, self.val[sid][safe], np.nan)
 
     def latest_index(self, sid: str, origin_ns: np.ndarray) -> np.ndarray:
-        """Grid index of the latest row usable at each origin (-1 if none)."""
+        """Grid index of the latest row usable at each origin (-1 if none).
+
+        Searches only rows that exist (missing source rows have no availability time), so gaps never
+        make it pick an older row. Availability times of existing rows are monotonic in timestamp
+        (asserted in load_store)."""
         f = self.fu[sid]
-        # availability times are monotonic in timestamp for every series (checked in __main__)
-        return np.searchsorted(f, origin_ns, side="right") - 1
+        present = np.flatnonzero(f != np.iinfo(np.int64).max)
+        k = np.searchsorted(f[present], origin_ns, side="right") - 1
+        return np.where(k >= 0, present[np.clip(k, 0, None)], -1)
 
     def truth(self, sid: str, idx: np.ndarray) -> np.ndarray:
         """Unmasked value: ONLY for targets, never for features."""
@@ -216,8 +221,13 @@ def _build(store: Store, origins: pd.DatetimeIndex, with_targets: bool) -> pd.Da
         df["y_spread"] = imb_t - spot_d
         df["y_dir"] = store.truth("fi_mfrr_direction", d_idx)
         df["y_target_fu"] = pd.to_datetime(store.fu["fi_imbalance_price"][np.clip(d_idx, 0, len(store.grid) - 1)], utc=True)
-    df["data_cutoff_utc"] = pd.to_datetime(
-        np.repeat(np.minimum(store.grid[np.clip(last_imb, 0, None)].asi8, o_ns), HORIZON), utc=True)
+    # data_cutoff_utc: start of the latest realised quarter-hour used by any lag feature (<= origin)
+    lag_used = ["fi_imbalance_price", "fi_mfrr_direction", "fi_mfrr_up_activated", "fi_mfrr_down_activated",
+                "fi_consumption", "fi_production", "fi_se1_flow", "fi_se3_flow", "fi_ee_flow", "fi_no4_flow",
+                "se1_imbalance_price_long", "se3_imbalance_price_long", "ee_imbalance_price_long"]
+    latest = np.max([store.latest_index(s_, o_ns) for s_ in lag_used], axis=0)
+    cutoff_ns = np.minimum(store.grid[np.clip(latest, 0, None)].asi8, o_ns)
+    df["data_cutoff_utc"] = pd.to_datetime(np.repeat(cutoff_ns, HORIZON), utc=True)
     return df
 
 
