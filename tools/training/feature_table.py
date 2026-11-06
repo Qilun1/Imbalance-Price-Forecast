@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from imbalance.features import FEATURE_SET, build_table
+from imbalance.features import FEATURE_SET, FEATURE_SETS, build_table
 from imbalance.paths import PROCESSED_DIR
 
 
@@ -12,9 +12,9 @@ def path_for(feature_set: str):
 
 
 def build_feature_table(feature_set: str = FEATURE_SET) -> pd.DataFrame:
-    if feature_set != FEATURE_SET:
-        raise ValueError(f"unknown feature set {feature_set!r} (available: {FEATURE_SET})")
-    df = build_table(with_targets=True)
+    if feature_set not in FEATURE_SETS:
+        raise ValueError(f"unknown feature set {feature_set!r} (available: {FEATURE_SETS})")
+    df = build_table(with_targets=True, feature_set=feature_set)
     p = path_for(feature_set)
     p.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(p, index=False)

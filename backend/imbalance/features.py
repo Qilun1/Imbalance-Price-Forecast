@@ -15,7 +15,8 @@ import pandas as pd
 from . import store as db
 from .contract import HORIZON_STEPS as HORIZON, SPIKE_MARGIN, STEP  # noqa: F401
 
-FEATURE_SET = "v1"
+FEATURE_SET = "v1"                 # default feature set
+FEATURE_SETS = ("v1", "v2")         # v2 = v1 + vintaged NWP weather proxies (backend/imbalance/nwp.py)
 
 LAG_SERIES = [
     "fi_imbalance_price", "fi_mfrr_direction", "fi_mfrr_up_price", "fi_mfrr_down_price",
@@ -76,11 +77,37 @@ def lag_window(store: Store, sid: str, last: np.ndarray, o: np.ndarray, k: int) 
     return np.column_stack([store.get(sid, last - j, o) for j in range(k)])
 
 
-def build(store: Store, origins: pd.DatetimeIndex, with_targets: bool) -> pd.DataFrame:
+def build(store: Store, origins: pd.DatetimeIndex, with_targets: bool, nwp: tuple | None = None) -> pd.DataFrame:
+    """Feature rows for (origin, step). nwp = (wind RunTable, temp RunTable) adds the v2 weather columns."""
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)   # nanmean of all-NaN windows -> NaN is intended
-        return _build(store, origins, with_targets)
+        df = _build(store, origins, with_targets)
+        if nwp is not None:
+            df = add_nwp(df, *nwp)
+        return df
+
+
+def add_nwp(df: pd.DataFrame, wind, temp) -> pd.DataFrame:
+    """v2 weather features from the newest NWP run usable at each origin (and the run before it)."""
+    o = df["forecast_origin_utc"].dt.as_unit("ns").astype("int64").to_numpy()
+    d = df["delivery_start_utc"].dt.as_unit("ns").astype("int64").to_numpy()
+    out = df.copy()
+    if wind is not None:
+        r = wind.latest(o)
+        mw = wind.at(r, o, d)
+        prev = wind.at(r - 1, o, d)
+        out["nwp_wind_mw"] = mw
+        out["nwp_wind_minus_fingrid_fc"] = mw - out["wind_fc"]
+        out["nwp_wind_run_change"] = mw - prev
+        out["nwp_wind_ramp_1h"] = mw - wind.at(r, o, d - 3_600_000_000_000)
+        out["nwp_run_age_h"] = wind.run_age_hours(r, o)
+    if temp is not None:
+        r = temp.latest(o)
+        t = temp.at(r, o, d)
+        out["nwp_temp_c"] = t
+        out["nwp_temp_change_vs_origin"] = t - temp.at(r, o, o)
+    return out
 
 
 def _build(store: Store, origins: pd.DatetimeIndex, with_targets: bool) -> pd.DataFrame:
@@ -214,11 +241,20 @@ def load_store() -> Store:
     return st
 
 
-def build_table(origins: pd.DatetimeIndex | None = None, with_targets: bool = True) -> pd.DataFrame:
+def build_table(origins: pd.DatetimeIndex | None = None, with_targets: bool = True,
+                feature_set: str = FEATURE_SET) -> pd.DataFrame:
     """Feature table for the given origins (default: every full hour with enough history)."""
+    if feature_set not in FEATURE_SETS:
+        raise ValueError(f"unknown feature set {feature_set!r}; available {FEATURE_SETS}")
     st = load_store()
+    nwp_tables = None
+    if feature_set == "v2":
+        from . import nwp
+        nwp_tables = nwp.load()
+        if nwp_tables == (None, None):
+            raise RuntimeError("feature set v2 needs NWP runs: run `uv run python -m tools.cli ingest openmeteo`")
     if origins is None:
         first = (st.grid[0] + pd.Timedelta(hours=27)).ceil("h")
         last = (st.grid[-1] - pd.Timedelta(hours=9, minutes=45)).floor("h")
         origins = pd.date_range(first, last, freq="h")
-    return build(st, pd.DatetimeIndex(origins), with_targets=with_targets)
+    return build(st, pd.DatetimeIndex(origins), with_targets=with_targets, nwp=nwp_tables)

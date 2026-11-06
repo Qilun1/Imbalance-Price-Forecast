@@ -35,6 +35,7 @@ uv run python -m tools.cli score --model lgbm_v1-val                # organiser 
 uv run python -m tools.cli export --model lgbm_v1 --period test --out forecast_backtest.csv
 uv run python -m tools.cli single-run --model lgbm_v1 --origin 2026-10-20T08:00Z
 uv run python -m tools.cli leakage --n 60
+uv run python -m tools.cli compare --models baseline-val lgbm_v1-val lgbm_v2-val   # ablation by lead hour
 uv run pytest
 ```
 
@@ -54,6 +55,19 @@ uv run python -m tools.cli ingest fingrid --datasets 75 --start 2026-05-31 --end
   daily limit is hit, the command stops cleanly; rerun it the next day and it resumes from the cache.
 - Fingrid: new series get new `series_id`s and a conservative availability rule; package series are
   only extended past the package end, never overwritten.
+
+## Weather features (feature set v2)
+
+After `ingest openmeteo` (which also registers the NWP sites with `ingest locations`):
+
+```powershell
+uv run python -m tools.cli pipeline --config tools/training/configs/lgbm_v2.yaml --set v2
+uv run python -m tools.cli compare --models baseline-val lgbm_v1-val lgbm_v2-val
+```
+
+v2 adds, from the newest ECMWF run usable at each origin: national wind power proxy (MW, power curve
+on 100 m wind at capacity-weighted sites), its difference from Fingrid's day-ahead wind forecast, the
+change versus the previous run, the 1 h ramp, run age, and capacity-weighted 2 m temperature.
 
 ## Model versions
 

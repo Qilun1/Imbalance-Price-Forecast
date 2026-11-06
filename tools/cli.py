@@ -5,6 +5,7 @@
 Commands
   ingest starter --src PATH     copy starter data into static_data and load the store
   ingest windsites              OpenStreetMap wind turbines -> static_data/raw/windsites/wind_sites_osm.csv
+  ingest locations              register the (coarsened) wind sites used as NWP capacity weights
   ingest openmeteo --start D --end D [--models ecmwf_ifs,metno_nordic]   NWP single runs -> forecast_runs
   ingest fingrid --datasets 75,188 --start D --end D    Fingrid API (needs FINGRID_API_KEY)
   status                        what is in the store and in infer_data
@@ -15,6 +16,7 @@ Commands
   baseline --period val|test    organiser's baseline as model "baseline-<period>"
   score --model NAME            validation score with the organiser's score.py (vs baseline)
   export --model NAME --period test|val [--out FILE]   submission CSV + organiser's validator
+  compare --models A B ...       side-by-side validation scores (overall and by lead hour) from score.py output
   leakage [--n 60]              independent availability-rule check
   single-run --model NAME --origin TS   print one 10 h forecast
   pipeline --config FILE        features -> train val -> infer val -> score -> train final
@@ -47,6 +49,11 @@ def cmd_ingest(a):
     elif a.source == "windsites":
         from tools.ingest.windsites import run
         run()
+    elif a.source == "locations":
+        from tools.ingest.windsites import load_sites
+        sites = load_sites()
+        store.set_locations(sites)
+        print(f"registered {len(sites)} NWP locations, {sites['capacity_mw'].sum():.0f} MW")
     elif a.source == "openmeteo":
         from tools.ingest.openmeteo import run
         run(a.start, a.end, a.models.split(",") if a.models else None, keep_cache=not a.no_cache)
@@ -131,6 +138,23 @@ def cmd_score(a):
         sys.exit(1)
 
 
+def cmd_compare(a):
+    """Diagnostic view of the organiser's score.py outputs (no metrics of our own)."""
+    metrics = ["mae_p50", "calibration_pinball_mean", "coverage_p10_p90", "brier_spike_mean", "brier_direction"]
+    rows, hz = [], []
+    for m in a.models:
+        d = WORK_DIR / "scores" / m
+        if not (d / "score_summary.csv").exists():
+            sys.exit(f"no scores for {m}: run `score --model {m}` first")
+        rows.append(pd.read_csv(d / "score_summary.csv")[metrics].assign(model=m))
+        hz.append(pd.read_csv(d / "score_by_horizon.csv").set_index("horizon_hour")[a.metric].rename(m))
+    with pd.option_context("display.width", 200, "display.float_format", "{:.4f}".format):
+        print("Overall (organiser score.py, validation period)")
+        print(pd.concat(rows).set_index("model").to_string())
+        print(f"\nBy lead hour: {a.metric}")
+        print(pd.concat(hz, axis=1).to_string())
+
+
 def cmd_leakage(a):
     from tools.eval.leakage import check
     if not check(a.set, a.n):
@@ -167,7 +191,7 @@ def main(argv=None):
     p = argparse.ArgumentParser(prog="tools.cli", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    s = sub.add_parser("ingest"); s.add_argument("source", choices=["starter", "windsites", "openmeteo", "fingrid"])
+    s = sub.add_parser("ingest"); s.add_argument("source", choices=["starter", "windsites", "locations", "openmeteo", "fingrid"])
     s.add_argument("--src"); s.add_argument("--start", default="2026-05-30"); s.add_argument("--end", default="2026-11-02T06:00")
     s.add_argument("--models"); s.add_argument("--datasets", default="75")
     s.add_argument("--no-cache", action="store_true", help="openmeteo: do not keep raw JSON")
@@ -187,6 +211,8 @@ def main(argv=None):
     s = sub.add_parser("export"); s.add_argument("--model", required=True)
     s.add_argument("--period", choices=["val", "test"], default="test"); s.add_argument("--out")
     s.set_defaults(f=cmd_export)
+    s = sub.add_parser("compare"); s.add_argument("--models", nargs="+", required=True)
+    s.add_argument("--metric", default="mae_p50"); s.set_defaults(f=cmd_compare)
     s = sub.add_parser("leakage"); s.add_argument("--set", default="v1"); s.add_argument("--n", type=int, default=60)
     s.set_defaults(f=cmd_leakage)
     s = sub.add_parser("single-run"); s.add_argument("--model", required=True); s.add_argument("--origin", required=True)

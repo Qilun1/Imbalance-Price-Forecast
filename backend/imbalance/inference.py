@@ -12,7 +12,7 @@ def infer(model_name: str, origins: pd.DatetimeIndex, features: pd.DataFrame | N
     """Forecast rows (submission columns) for every origin; also written to infer_data."""
     bundle = Bundle.load(model_name)
     if features is None:
-        features = build_table(origins, with_targets=False)
+        features = build_table(origins, with_targets=False, feature_set=bundle.meta.get("feature_set", "v1"))
     feats = features[features["forecast_origin_utc"].isin(origins)].reset_index(drop=True)
     missing = set(pd.DatetimeIndex(origins)) - set(feats["forecast_origin_utc"])
     if missing:

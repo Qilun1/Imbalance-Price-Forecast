@@ -59,6 +59,13 @@ CREATE TABLE IF NOT EXISTS series_catalog (
     licence VARCHAR,
     description VARCHAR
 );
+CREATE TABLE IF NOT EXISTS locations (
+    location_id VARCHAR PRIMARY KEY,
+    lat DOUBLE,
+    lon DOUBLE,
+    capacity_mw DOUBLE,
+    description VARCHAR
+);
 CREATE TABLE IF NOT EXISTS ingest_log (
     ingest_batch VARCHAR,
     source VARCHAR,
@@ -141,6 +148,23 @@ def drop_forecast_runs(source: str, path: Path = STATIC_DB) -> int:
         n = con.execute("SELECT count(*) FROM forecast_runs WHERE source = ?", [source]).fetchall()[0][0]
         con.execute("DELETE FROM forecast_runs WHERE source = ?", [source]).fetchall()
     return n
+
+
+def set_locations(df: pd.DataFrame, path: Path = STATIC_DB) -> None:
+    """Replace the NWP sampling locations (site id, position, capacity weight)."""
+    df = df.rename(columns={"site_id": "location_id"})[["location_id", "lat", "lon", "capacity_mw"]].copy()
+    df["description"] = "wind site (tools/ingest/windsites.py)"
+    with connect(path) as con:
+        con.register("incoming", df)
+        con.execute("DELETE FROM locations").fetchall()
+        con.execute("INSERT INTO locations SELECT * FROM incoming").fetchall()
+
+
+def locations(path: Path = STATIC_DB) -> pd.Series:
+    """Capacity weight per location_id (empty if none registered)."""
+    with connect(path) as con:      # read/write so the table exists on older stores
+        df = con.execute("SELECT location_id, capacity_mw FROM locations").df()
+    return df.set_index("location_id")["capacity_mw"]
 
 
 def upsert_catalog(df: pd.DataFrame, path: Path = STATIC_DB) -> None:

@@ -81,6 +81,7 @@ def run(start: str, end: str, models: list[str] | None = None, keep_cache: bool 
     global KEEP_CACHE
     KEEP_CACHE = keep_cache
     sites = load_sites()
+    store.set_locations(sites)
     models = models or DEFAULT_MODELS
     print(f"{len(sites)} sites, {sites['capacity_mw'].sum():.0f} MW, variables {VARIABLES}, {FORECAST_HOURS} h per run")
     client = Client(min_interval_s=0.6, budget=Budget(**FREE_BUDGET))

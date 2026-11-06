@@ -25,7 +25,11 @@ def check(feature_set: str = "v1", n: int = 60, seed: int = 0, origins: pd.Datet
     bad = 0
     for o in sample:
         visible = long[long["first_usable_origin_utc"] <= o]
-        ref = build(Store(visible), pd.DatetimeIndex([o]), with_targets=False)
+        nwp_tables = None
+        if feature_set == "v2":
+            from imbalance import nwp
+            nwp_tables = nwp.load(visible_before=o)          # runs not yet usable are physically removed
+        ref = build(Store(visible), pd.DatetimeIndex([o]), with_targets=False, nwp=nwp_tables)
         used = table[table["forecast_origin_utc"] == o].sort_values("step")
         same = np.isclose(ref[cols].to_numpy(float), used[cols].to_numpy(float), equal_nan=True, rtol=0, atol=1e-9)
         if not same.all():
