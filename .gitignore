@@ -8,6 +8,11 @@ backend/artifacts/**
 !backend/artifacts/.gitkeep
 tools/starter_package/data/
 tools/starter_package/baseline_output/
+# full organiser package copies anywhere in the repo (contain licensed spot data)
+starter_package_v1/
+**/starter_package_v1/
+TurkuEnergia_SinceAI2026/
+*.zip
 **/data/
 *.parquet
 *.duckdb
