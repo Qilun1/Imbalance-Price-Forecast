@@ -29,7 +29,8 @@ experts.
   Every source we add gets the same column.
 - **Never commit data** (AGENTS.md rule 0). Only code, configs, docs and our own trained models.
 - Nord Pool spot data is licensed to Turku Energia for the hackathon only. Never commit anything
-  under `static_data/`, `backend/infer_data/` or `backend/artifacts/`, and delete the data after the event.
+  under `static_data/` or `backend/infer_data/` (in `backend/artifacts/` only our own models), and
+  delete the data after the event.
 
 ## Setup (Windows, macOS, Linux)
 
@@ -38,7 +39,12 @@ Requires [uv](https://docs.astral.sh/uv/).
 ```bash
 uv sync
 git config core.hooksPath .githooks     # once per clone: blocks commits that contain data
+cp .env.example .env                    # then fill in FINGRID_API_KEY
 ```
+
+API keys live only in `.env` (gitignored) or in environment variables of the same name; see
+`.env.example` for which sources need a key and where to get one. `ENTSOE_API_TOKEN` is not needed:
+the ENTSO-E data comes ready-made in the starter package.
 
 Put the starter package data files (`inputs.parquet`, `inputs.csv`, `spot_nordpool.csv`,
 `actuals_validation.csv`, `quality_report.*`) into `static_data/raw/starter/`.
