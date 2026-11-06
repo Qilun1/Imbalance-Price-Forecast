@@ -48,7 +48,9 @@ uv run python -m tools.cli ingest fingrid --datasets 75 --start 2026-05-31 --end
 ```
 
 - Open-Meteo: Single Runs API only, 4 runs a day per model, about 620 requests per model for the
-  whole period. Raw responses are cached in `static_data/raw/openmeteo/`, so a rerun resumes.
+  whole period. Sites: OSM turbines merged to ~50 km cells (about 40 sites); variables wind speed at
+  100 m and 2 m temperature; 27 h per run. About 2.6 M rows (~30 MB) in total. Raw responses are
+  cached in `static_data/raw/openmeteo/<model>_<site hash>/`, so a rerun resumes; `--no-cache` skips it.
 - Fingrid: new series get new `series_id`s and a conservative availability rule; package series are
   only extended past the package end, never overwritten.
 

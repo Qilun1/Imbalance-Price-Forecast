@@ -9,6 +9,8 @@ static_data/raw/openmeteo/<model>/<run>.json, so an interrupted pull resumes whe
 """
 from __future__ import annotations
 
+import hashlib
+
 import pandas as pd
 
 from imbalance import store
@@ -22,9 +24,12 @@ MODELS = {
     "ecmwf_ifs": (pd.Timedelta(hours=7), (0, 6, 12, 18)),
     "metno_nordic": (pd.Timedelta(hours=3), (0, 6, 12, 18)),
 }
-VARIABLES = ["wind_speed_10m", "wind_speed_100m", "wind_direction_100m", "temperature_2m"]
+VARIABLES = ["wind_speed_100m", "temperature_2m"]          # hub-height wind proxy + heating demand
 UNITS = {"wind_speed_10m": "m/s", "wind_speed_100m": "m/s", "wind_direction_100m": "deg", "temperature_2m": "degC"}
-FORECAST_HOURS = 36           # covers origin + 10 h for any run up to ~24 h old
+FORECAST_HOURS = 27           # newest usable run is <= ~13 h old; + 10 h horizon + margin
+
+
+KEEP_CACHE = True             # set False (--no-cache) to keep only the DuckDB rows
 
 
 def first_usable(run_init: pd.Timestamp, delay: pd.Timedelta) -> pd.Timestamp:
@@ -43,7 +48,8 @@ def fetch_run(client: Client, model: str, run: pd.Timestamp, sites: pd.DataFrame
         "timezone": "GMT",
         "timeformat": "unixtime",
     }
-    cache = RAW_DIR / "openmeteo" / model / f"{run:%Y%m%dT%H%M}.json"
+    key = hashlib.sha1((params["latitude"] + params["longitude"] + params["hourly"]).encode()).hexdigest()[:8]
+    cache = None if not KEEP_CACHE else RAW_DIR / "openmeteo" / f"{model}_{key}" / f"{run:%Y%m%dT%H%M}.json"
     data = client.get_json(URL, params=params, cache=cache)
     locs = data if isinstance(data, list) else [data]
     if len(locs) != len(sites):
@@ -68,8 +74,11 @@ def fetch_run(client: Client, model: str, run: pd.Timestamp, sites: pd.DataFrame
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
 
-def run(start: str, end: str, models: list[str] | None = None) -> None:
+def run(start: str, end: str, models: list[str] | None = None, keep_cache: bool = True) -> None:
+    global KEEP_CACHE
+    KEEP_CACHE = keep_cache
     sites = load_sites()
+    print(f"{len(sites)} sites, {sites['capacity_mw'].sum():.0f} MW, variables {VARIABLES}, {FORECAST_HOURS} h per run")
     client = Client(min_interval_s=0.6)
     for model in models or list(MODELS):
         delay, hours = MODELS[model]
