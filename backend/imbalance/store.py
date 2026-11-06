@@ -135,6 +135,14 @@ def insert_forecast_runs(df: pd.DataFrame, batch: str, path: Path = STATIC_DB) -
     return after - before
 
 
+def drop_forecast_runs(source: str, path: Path = STATIC_DB) -> int:
+    """Delete our own vintaged forecasts of one source (never touches organiser observations)."""
+    with connect(path) as con:
+        n = con.execute("SELECT count(*) FROM forecast_runs WHERE source = ?", [source]).fetchall()[0][0]
+        con.execute("DELETE FROM forecast_runs WHERE source = ?", [source]).fetchall()
+    return n
+
+
 def upsert_catalog(df: pd.DataFrame, path: Path = STATIC_DB) -> None:
     cols = ["series_id", "source", "dataset_id", "unit", "kind", "availability_rule", "licence", "description"]
     df = df[cols].copy()
