@@ -1,10 +1,36 @@
-data/
+# Licensed and generated data: never commit (Nord Pool spot licence)
+static_data/**
+!static_data/README.md
+!static_data/**/.gitkeep
+backend/infer_data/**
+!backend/infer_data/README.md
+backend/artifacts/**
+!backend/artifacts/.gitkeep
+tools/starter_package/data/
+tools/starter_package/baseline_output/
 **/data/
-baseline_output/
-work/
-submission/
 *.parquet
-__pycache__/
-.ipynb_checkpoints/
+*.duckdb
+*.duckdb.wal
+submission/
+results/
+
+# Secrets
+.env
 *.env
 .secrets/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Frontend
+node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
+Thumbs.db
