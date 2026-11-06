@@ -103,9 +103,10 @@ def run() -> Path:
     return out
 
 
-def coarsen(sites: pd.DataFrame, cell_km: float = 50.0, min_mw: float = 40.0) -> pd.DataFrame:
+def coarsen(sites: pd.DataFrame, cell_km: float = 100.0, min_mw: float = 150.0) -> pd.DataFrame:
     """Merge sites onto a ~cell_km grid (capacity-weighted position), then fold sites below min_mw into
-    their nearest larger site. Keeps the national total; keeps NWP requests small (about 40 points for 50 km, 40 MW)."""
+    their nearest larger site. Keeps the national total. Default (100 km, 150 MW) gives about 10 regional
+    points: Open-Meteo counts every location as one API call (free tier 10,000 a day)."""
     lat_deg = cell_km / 111.0
     lon_deg = cell_km / (111.0 * np.cos(np.radians(64.0)))
     s = sites.copy()
@@ -126,5 +127,5 @@ def coarsen(sites: pd.DataFrame, cell_km: float = 50.0, min_mw: float = 40.0) ->
 
 
 def load_sites() -> pd.DataFrame:
-    """OSM sites (coarsened to ~50 km, about 40 sites) if built, else the coarse v0 list."""
-    return coarsen(pd.read_csv(OSM_SITES)) if OSM_SITES.exists() else v0_sites()
+    """OSM sites coarsened to about 10 regional points if built, else the v0 list (coarsened the same way)."""
+    return coarsen(pd.read_csv(OSM_SITES) if OSM_SITES.exists() else v0_sites())

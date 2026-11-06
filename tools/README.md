@@ -47,10 +47,11 @@ $env:FINGRID_API_KEY="..."   # or put FINGRID_API_KEY=... in .env at the repo ro
 uv run python -m tools.cli ingest fingrid --datasets 75 --start 2026-05-31 --end 2026-11-02T07:00
 ```
 
-- Open-Meteo: Single Runs API only, 4 runs a day per model, about 620 requests per model for the
-  whole period. Sites: OSM turbines merged to ~50 km cells (about 40 sites); variables wind speed at
-  100 m and 2 m temperature; 27 h per run. About 2.6 M rows (~30 MB) in total. Raw responses are
-  cached in `static_data/raw/openmeteo/<model>_<site hash>/`, so a rerun resumes; `--no-cache` skips it.
+- Open-Meteo: Single Runs API only, ECMWF IFS 9 km by default (`--models ecmwf_ifs,metno_nordic` for
+  more), 4 runs a day, wind speed at 100 m and 2 m temperature, 27 h per run. Sites: OSM turbines
+  merged into about 10 regional points (capacity-weighted). The free tier counts every location as one
+  call (600/min, 5,000/h, 10,000/day): about 6,200 calls in total, paced automatically (~70 min). If the
+  daily limit is hit, the command stops cleanly; rerun it the next day and it resumes from the cache.
 - Fingrid: new series get new `series_id`s and a conservative availability rule; package series are
   only extended past the package end, never overwritten.
 

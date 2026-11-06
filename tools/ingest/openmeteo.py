@@ -15,7 +15,7 @@ import pandas as pd
 
 from imbalance import store
 from imbalance.paths import RAW_DIR
-from tools.ingest.http import Client
+from tools.ingest.http import Budget, Client, DailyLimit
 from tools.ingest.windsites import load_sites
 
 URL = "https://single-runs-api.open-meteo.com/v1/forecast"
@@ -24,6 +24,9 @@ MODELS = {
     "ecmwf_ifs": (pd.Timedelta(hours=7), (0, 6, 12, 18)),
     "metno_nordic": (pd.Timedelta(hours=3), (0, 6, 12, 18)),
 }
+DEFAULT_MODELS = ["ecmwf_ifs"]   # free tier: ~10 sites x 620 runs = ~6,200 calls, inside 10,000/day
+# Open-Meteo free tier: 600/min, 5,000/h, 10,000/day; every location counts as one call. Stay below.
+FREE_BUDGET = dict(per_minute=500, per_hour=4500, per_day=9500)
 VARIABLES = ["wind_speed_100m", "temperature_2m"]          # hub-height wind proxy + heating demand
 UNITS = {"wind_speed_10m": "m/s", "wind_speed_100m": "m/s", "wind_direction_100m": "deg", "temperature_2m": "degC"}
 FORECAST_HOURS = 27           # newest usable run is <= ~13 h old; + 10 h horizon + margin
@@ -50,7 +53,7 @@ def fetch_run(client: Client, model: str, run: pd.Timestamp, sites: pd.DataFrame
     }
     key = hashlib.sha1((params["latitude"] + params["longitude"] + params["hourly"]).encode()).hexdigest()[:8]
     cache = None if not KEEP_CACHE else RAW_DIR / "openmeteo" / f"{model}_{key}" / f"{run:%Y%m%dT%H%M}.json"
-    data = client.get_json(URL, params=params, cache=cache)
+    data = client.get_json(URL, params=params, cache=cache, weight=len(sites))
     locs = data if isinstance(data, list) else [data]
     if len(locs) != len(sites):
         raise RuntimeError(f"{model} {run}: {len(locs)} locations returned for {len(sites)} sites")
@@ -78,9 +81,10 @@ def run(start: str, end: str, models: list[str] | None = None, keep_cache: bool 
     global KEEP_CACHE
     KEEP_CACHE = keep_cache
     sites = load_sites()
+    models = models or DEFAULT_MODELS
     print(f"{len(sites)} sites, {sites['capacity_mw'].sum():.0f} MW, variables {VARIABLES}, {FORECAST_HOURS} h per run")
-    client = Client(min_interval_s=0.6)
-    for model in models or list(MODELS):
+    client = Client(min_interval_s=0.6, budget=Budget(**FREE_BUDGET))
+    for model in models:
         delay, hours = MODELS[model]
         runs = [t for t in pd.date_range(pd.Timestamp(start, tz="UTC"), pd.Timestamp(end, tz="UTC"), freq="h")
                 if t.hour in hours]
@@ -91,13 +95,18 @@ def run(start: str, end: str, models: list[str] | None = None, keep_cache: bool 
                 if not df.empty:
                     inserted += store.insert_forecast_runs(df, batch=f"openmeteo:{model}")
                 ok += 1
+            except DailyLimit:
+                print(f"{model}: daily API limit reached after {ok} runs ({inserted} rows). Cached runs are kept; "
+                      "rerun the same command tomorrow to continue.")
+                _catalog(models)
+                return
             except RuntimeError as e:
                 fail += 1
                 print(f"  {model} {r:%Y-%m-%d %H}Z skipped: {str(e)[:120]}")
             if i % 40 == 0:
                 print(f"  {model}: {i}/{len(runs)} runs, {inserted} rows")
         print(f"{model}: {ok} runs ok, {fail} skipped, {inserted} rows inserted (delay {delay})")
-    _catalog(models or list(MODELS))
+    _catalog(models)
 
 
 def _catalog(models: list[str]) -> None:
