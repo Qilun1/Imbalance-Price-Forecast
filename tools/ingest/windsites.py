@@ -1,8 +1,16 @@
-"""Wind sites from OpenStreetMap (Overpass API), clustered into ~10 km sites with capacity.
+"""Wind sites used to sample NWP forecasts for a capacity-weighted national wind proxy.
 
-Writes tools/ingest/reference/wind_sites_osm.csv (same columns as wind_sites_v0.csv). Positions are
-(c) OpenStreetMap contributors, ODbL. Turbines without a rated output tag get the median of tagged
-turbines. Total capacity is scaled to the Renewables Finland total so the national weights match.
+v0 (in code, below): regional capacities from Renewables Finland (Suomen Uusiutuvat ry), wind
+statistics 30 Jun 2026, total 9,535 MW
+(https://suomenuusiutuvat.fi/media/tuulivoima_vuositilastot-6_2026.pdf). Region labels of the chart
+were matched to its pie-chart shares; "Other" is the remainder. Each region's capacity is split
+evenly over a few municipalities with large wind clusters; coordinates are approximate municipality
+centres (about +-10 km). Good for a 9 km grid and a national aggregate, not for farm-level work.
+
+OSM refinement (`ingest windsites`): turbine positions from OpenStreetMap via Overpass, clustered into
+~10 km sites, written to static_data/raw/windsites/wind_sites_osm.csv (not committed: AGENTS.md
+rule 0). Data (c) OpenStreetMap contributors, ODbL. Turbines without a rated output tag get the median
+of tagged turbines; the total is scaled to the Renewables Finland total.
 """
 from __future__ import annotations
 
@@ -12,6 +20,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from imbalance.paths import RAW_DIR
 from tools.ingest.http import Client
 
 OVERPASS = "https://overpass-api.de/api/interpreter"
@@ -24,7 +33,34 @@ area["ISO3166-1"="FI"][admin_level=2]->.fi;
 );
 out center tags;
 """
-REF_DIR = Path(__file__).parent / "reference"
+OSM_SITES = RAW_DIR / "windsites" / "wind_sites_osm.csv"
+
+# region: (capacity MW, [(place, lat, lon), ...])
+V0_REGIONS = {
+    "Pohjois-Pohjanmaa": (3397.0, [("Kalajoki", 64.26, 23.95), ("Pyhajoki", 64.47, 24.26), ("Raahe", 64.68, 24.48),
+                                   ("Siikajoki", 64.82, 24.76), ("Ii", 65.32, 25.37), ("Merijarvi", 64.30, 24.45),
+                                   ("Haapavesi", 64.14, 25.37), ("Pyhajarvi", 63.68, 25.98)]),
+    "Pohjanmaa": (1663.0, [("Kristiinankaupunki", 62.27, 21.38), ("Narpio", 62.47, 21.34), ("Korsnas", 62.79, 21.19),
+                           ("Uusikaarlepyy", 63.52, 22.53), ("Voyri", 63.13, 22.25)]),
+    "Etela-Pohjanmaa": (1155.0, [("Teuva", 62.49, 21.74), ("Isojoki", 62.11, 21.96), ("Kurikka", 62.62, 22.40),
+                                 ("Lapua", 62.97, 23.01), ("Kauhava", 63.10, 23.07)]),
+    "Keski-Pohjanmaa": (983.0, [("Kokkola", 63.84, 23.13), ("Kannus", 63.90, 23.90), ("Toholampi", 63.77, 24.25),
+                                ("Halsua", 63.46, 24.17)]),
+    "Lappi": (765.0, [("Tornio", 65.85, 24.15), ("Simo", 65.66, 25.06), ("Kemi", 65.74, 24.56), ("Tervola", 66.08, 24.81)]),
+    "Satakunta": (492.0, [("Pori", 61.63, 21.45), ("Merikarvia", 61.86, 21.50), ("Pomarkku", 61.69, 22.01)]),
+    "Keski-Suomi": (350.0, [("Kinnula", 63.37, 24.97), ("Pihtipudas", 63.37, 25.57), ("Viitasaari", 63.07, 25.86)]),
+    "Kainuu": (272.0, [("Kajaani", 64.23, 27.73), ("Paltamo", 64.41, 27.83)]),
+    "Other": (458.0, [("Kihnio", 62.21, 23.18), ("Iisalmi", 63.56, 27.19), ("Uusikaupunki", 60.80, 21.41)]),
+}
+
+
+def v0_sites() -> pd.DataFrame:
+    rows = []
+    for region, (mw, places) in V0_REGIONS.items():
+        for place, lat, lon in places:
+            rows.append({"site_id": f"v0_{place.lower()}", "region": region, "place": place, "lat": lat, "lon": lon,
+                         "capacity_mw": mw / len(places)})
+    return pd.DataFrame(rows)
 NATIONAL_MW = 9535.0          # Renewables Finland, 30 Jun 2026
 CELL_DEG = (0.09, 0.2)        # ~10 km x ~10 km at 63 N (lat, lon)
 
@@ -60,7 +96,8 @@ def run() -> Path:
     g["capacity_mw"] *= NATIONAL_MW / g["capacity_mw"].sum()
     g["site_id"] = "osm_" + g["cell"]
     g["region"], g["place"] = "osm", g["turbines"].astype(str) + " turbines"
-    out = REF_DIR / "wind_sites_osm.csv"
+    out = OSM_SITES
+    out.parent.mkdir(parents=True, exist_ok=True)
     g[["site_id", "region", "place", "lat", "lon", "capacity_mw"]].round(4).to_csv(out, index=False)
     print(f"{len(t)} turbines -> {len(g)} sites -> {out}")
     return out
@@ -68,5 +105,4 @@ def run() -> Path:
 
 def load_sites() -> pd.DataFrame:
     """OSM sites if built, else the coarse v0 list."""
-    osm = REF_DIR / "wind_sites_osm.csv"
-    return pd.read_csv(osm if osm.exists() else REF_DIR / "wind_sites_v0.csv")
+    return pd.read_csv(OSM_SITES) if OSM_SITES.exists() else v0_sites()

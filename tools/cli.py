@@ -4,7 +4,7 @@
 
 Commands
   ingest starter --src PATH     copy starter data into static_data and load the store
-  ingest windsites              OpenStreetMap wind turbines -> tools/ingest/reference/wind_sites_osm.csv
+  ingest windsites              OpenStreetMap wind turbines -> static_data/raw/windsites/wind_sites_osm.csv
   ingest openmeteo --start D --end D [--models ecmwf_ifs,metno_nordic]   NWP single runs -> forecast_runs
   ingest fingrid --datasets 75,188 --start D --end D    Fingrid API (needs FINGRID_API_KEY)
   status                        what is in the store and in infer_data

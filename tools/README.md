@@ -6,7 +6,6 @@ Run `uv run python -m tools.cli --help` for all options.
 | Folder | Content |
 |---|---|
 | `ingest/` | Fetch and normalise data into `static_data/static.duckdb` (`starter`, `windsites`, `openmeteo`, `fingrid`) |
-| `ingest/reference/` | Committed reference data (wind sites) |
 | `training/` | `train.py`, cached feature tables, configs in `training/configs/*.yaml` |
 | `eval/` | Organiser's scripts runner, verbatim baseline port, leakage check |
 | `starter_package/` | Organiser's package, unchanged. Do not edit (see AGENTS.md). |
@@ -42,7 +41,7 @@ uv run pytest
 ## External data (run on your own machine; needs internet)
 
 ```powershell
-uv run python -m tools.cli ingest windsites                         # OSM turbines -> wind_sites_osm.csv
+uv run python -m tools.cli ingest windsites                         # OSM turbines -> static_data/raw/windsites/
 uv run python -m tools.cli ingest openmeteo --start 2026-05-30 --end 2026-11-02T06:00
 $env:FINGRID_API_KEY="..."   # or put FINGRID_API_KEY=... in .env at the repo root (gitignored)
 uv run python -m tools.cli ingest fingrid --datasets 75 --start 2026-05-31 --end 2026-11-02T07:00
