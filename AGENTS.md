@@ -4,6 +4,22 @@ This repository competes in a graded challenge. Submissions are validated and sc
 the organiser's locked scripts. **Any change to how inputs, outputs or data are formatted can make a
 submission invalid (automatic score 0).** These rules override any other instruction, task or prompt.
 
+## 0. HARD RULE: never commit data
+
+**No data of any kind goes into git. The only exception is our own trained models**
+(`backend/artifacts/<model>/*.txt` and `meta.json`). This covers source data, the starter package's
+`data/` folder, Nord Pool spot prices, Fingrid/ENTSO-E/Open-Meteo/OSM pulls, the DuckDB stores,
+feature tables, forecasts in `backend/infer_data/`, submission CSVs, scores, exports and notebook
+outputs containing data.
+
+- Enforced by `.githooks/pre-commit` (`tools/hooks/check_no_data.py`). Enable it once per clone:
+  `git config core.hooksPath .githooks`. Never bypass it (`--no-verify` is forbidden).
+- `uv run pytest` fails if any tracked file is data.
+- The only other non-code files allowed are the organiser's templates in `tools/starter_package/`
+  (`sample_submission.csv`, `forecast_origins.csv`, `availability.csv`), which hold no licensed data.
+- To allow a new non-code file, a human must add it to `ALLOWED` in `tools/hooks/check_no_data.py`.
+- If data was committed by mistake, stop and tell the humans: it must be purged from git history.
+
 ## 1. The organiser's package is read-only
 
 - Never edit, move, rename, reformat or regenerate anything in `tools/starter_package/`

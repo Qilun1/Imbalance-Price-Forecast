@@ -1,0 +1,11 @@
+#!/bin/sh
+# Blocks commits that contain data (AGENTS.md rule 0). Enable once per clone:
+#   git config core.hooksPath .githooks
+ROOT="$(git rev-parse --show-toplevel)"
+for PY in "uv run --no-sync python" python3 python py; do
+  if $PY -c "import sys" >/dev/null 2>&1; then
+    exec $PY "$ROOT/tools/hooks/check_no_data.py"
+  fi
+done
+echo "pre-commit: no Python found, cannot check for data; commit blocked" >&2
+exit 1

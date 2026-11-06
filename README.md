@@ -27,6 +27,7 @@ experts.
   validator (`validate_submission.py`) and scorer (`score.py`) there are the source of truth.
 - Data availability rule: at forecast origin `t`, use a row only if `first_usable_origin_utc <= t`.
   Every source we add gets the same column.
+- **Never commit data** (AGENTS.md rule 0). Only code, configs, docs and our own trained models.
 - Nord Pool spot data is licensed to Turku Energia for the hackathon only. Never commit anything
   under `static_data/`, `backend/infer_data/` or `backend/artifacts/`, and delete the data after the event.
 
@@ -36,6 +37,7 @@ Requires [uv](https://docs.astral.sh/uv/).
 
 ```bash
 uv sync
+git config core.hooksPath .githooks     # once per clone: blocks commits that contain data
 ```
 
 Put the starter package data files (`inputs.parquet`, `inputs.csv`, `spot_nordpool.csv`,
