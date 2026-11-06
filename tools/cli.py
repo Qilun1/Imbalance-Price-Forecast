@@ -4,6 +4,9 @@
 
 Commands
   ingest starter --src PATH     copy starter data into static_data and load the store
+  ingest windsites              OpenStreetMap wind turbines -> tools/ingest/reference/wind_sites_osm.csv
+  ingest openmeteo --start D --end D [--models ecmwf_ifs,metno_nordic]   NWP single runs -> forecast_runs
+  ingest fingrid --datasets 75,188 --start D --end D    Fingrid API (needs FINGRID_API_KEY)
   status                        what is in the store and in infer_data
   features [--set v1]           (re)build the cached feature table
   train --config FILE --mode val|final
@@ -40,8 +43,15 @@ def cmd_ingest(a):
     if a.source == "starter":
         from tools.ingest.starter import run
         run(Path(a.src) if a.src else None)
-    else:
-        sys.exit(f"unknown source {a.source}")
+    elif a.source == "windsites":
+        from tools.ingest.windsites import run
+        run()
+    elif a.source == "openmeteo":
+        from tools.ingest.openmeteo import run
+        run(a.start, a.end, a.models.split(",") if a.models else None)
+    elif a.source == "fingrid":
+        from tools.ingest.fingrid import run
+        run([int(x) for x in a.datasets.split(",")], a.start, a.end)
 
 
 def cmd_status(a):
@@ -151,7 +161,9 @@ def main(argv=None):
     p = argparse.ArgumentParser(prog="tools.cli", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    s = sub.add_parser("ingest"); s.add_argument("source", choices=["starter"]); s.add_argument("--src")
+    s = sub.add_parser("ingest"); s.add_argument("source", choices=["starter", "windsites", "openmeteo", "fingrid"])
+    s.add_argument("--src"); s.add_argument("--start", default="2026-05-30"); s.add_argument("--end", default="2026-11-02T06:00")
+    s.add_argument("--models"); s.add_argument("--datasets", default="75")
     s.set_defaults(f=cmd_ingest)
     sub.add_parser("status").set_defaults(f=cmd_status)
     s = sub.add_parser("features"); s.add_argument("--set", default="v1"); s.set_defaults(f=cmd_features)
