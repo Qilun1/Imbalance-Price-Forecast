@@ -67,7 +67,8 @@ def test_openmeteo_parse(monkeypatch):
     payload = [{"hourly": {"time": [t0, t0 + 3600], "wind_speed_100m": [5.0, 6.0], "temperature_2m": [1, 2]}}] * 2
 
     class Fake:
-        def get_json(self, url, params=None, cache=None):
+        def get_json(self, url, params=None, cache=None, weight=1.0):
+            assert weight == 2, "each location must count as one API call"
             assert params["run"] == "2026-10-01T00:00" and params["models"] == "ecmwf_ifs"
             return payload
 
