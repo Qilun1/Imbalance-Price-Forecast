@@ -75,8 +75,9 @@ The submission file `forecast_backtest.csv` must keep exactly:
 
 - Nord Pool spot data (`spot_nordpool.csv`, the `spot_price` column of actuals) is licensed for the
   hackathon only. Never commit, print, upload, publish or send it anywhere, including cloud databases,
-  logs, notebooks with outputs, screenshots or chat. `static_data/`, `backend/infer_data/` and
-  `backend/artifacts/` are gitignored and must stay so.
+  logs, notebooks with outputs, screenshots or chat. `static_data/` and `backend/infer_data/` are
+  gitignored and must stay so; in `backend/artifacts/` only model files (`*.txt`, `meta.json`) may be
+  tracked (rule 0).
 
 ## 7. When unsure
 
