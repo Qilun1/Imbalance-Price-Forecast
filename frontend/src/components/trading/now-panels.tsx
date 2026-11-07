@@ -1,34 +1,23 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { CircleDashed, History, ListX } from "lucide-react";
+import { CircleDashed } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { ActualPoint, Changes, Forecast } from "@/lib/api/client";
+import type { ActualPoint } from "@/lib/api/client";
 import { queries } from "@/lib/api/queries";
-import {
-  formatClock,
-  formatDateTime,
-  formatPercent,
-  formatPoints,
-  formatPrice,
-  formatPriceRange,
-  formatSignedPrice,
-  formatWindow,
-  PRICE_UNIT,
-} from "@/lib/format";
-import { headline, isInWindow, rankDrivers, stepsInWindow, windowOf } from "@/lib/forecast";
+import { formatClock, formatPercent, formatPrice, formatPriceRange, formatSignedPrice, PRICE_UNIT } from "@/lib/format";
+import { headline, windowOf } from "@/lib/forecast";
 import { useViewingTime } from "@/lib/realtime/viewing-time";
 
 import { DirectionLabel, Unit } from "./cells";
 import { KpiCard, KpiCardSkeleton } from "./kpi-card";
 import { isSameSituation, useNow } from "./now-context";
-import { Panel, PanelBody, PanelHeader, PanelMessage, SkeletonLines } from "./panel";
+import { Panel, PanelBody, PanelHeader, PanelMessage } from "./panel";
 import { QueryState } from "./query-state";
 
 const NONE: readonly ActualPoint[] = [];
@@ -139,118 +128,6 @@ export function ForecastPanel() {
               windows={windows}
             />
           )}
-        </QueryState>
-      </PanelBody>
-    </Panel>
-  );
-}
-
-function Scope() {
-  const { selected } = useNow();
-  return selected ? `for ${formatWindow(selected.window_start_utc, selected.window_end_utc)}` : "across the next 10 hours";
-}
-
-function DriverRows({ forecast }: { forecast: Forecast }) {
-  const { selected } = useNow();
-  const steps = stepsInWindow(forecast.steps, selected ? windowOf(selected) : null);
-  const drivers = rankDrivers(steps.length ? steps : forecast.steps, 5);
-  const total = steps.length || forecast.steps.length;
-  if (!drivers.length) {
-    return (
-      <PanelMessage icon={ListX} title="No drivers named">
-        This forecast names no main factors for this window.
-      </PanelMessage>
-    );
-  }
-  return (
-    <ol className="flex flex-col gap-2">
-      {drivers.map((driver) => (
-        <li key={driver.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1">
-          <span className="truncate text-sm text-ink" title={driver.label}>
-            {driver.label}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            {driver.quarters} of {total} quarter-hours
-          </span>
-          <span className="col-span-2 h-1 overflow-hidden rounded-full bg-fill" aria-hidden>
-            <span className="block h-full rounded-full bg-series-1" style={{ width: `${(driver.quarters / total) * 100}%` }} />
-          </span>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-export function DriversPanel() {
-  const { asOf } = useViewingTime();
-  const forecast = useQuery(queries.forecast(asOf));
-  return (
-    <Panel label="Main factors" className="h-full">
-      <PanelHeader title="Main factors" note={<Scope />} />
-      <PanelBody className="scrollbar-thin overflow-auto">
-        <QueryState query={forecast} skeleton={<SkeletonLines rows={5} />}>
-          {(data) => <DriverRows forecast={data} />}
-        </QueryState>
-      </PanelBody>
-    </Panel>
-  );
-}
-
-function ChangeRows({ changes }: { changes: Changes }) {
-  const { selected } = useNow();
-  if (!changes.previous_origin_utc) {
-    return (
-      <PanelMessage icon={History} title="No previous update">
-        This is the first forecast of its period, so there is nothing to compare with.
-      </PanelMessage>
-    );
-  }
-  if (!changes.points.length) {
-    return (
-      <PanelMessage icon={History} title="No changes to show">
-        The previous update covers no quarter-hours of this one.
-      </PanelMessage>
-    );
-  }
-  const inScope = selected ? changes.points.filter((point) => isInWindow(point.delivery_start_utc, windowOf(selected))) : changes.points;
-  const largest = [...(inScope.length ? inScope : changes.points)]
-    .sort((a, b) => Math.abs(b.p50_change) - Math.abs(a.p50_change))
-    .slice(0, 3)
-    .sort((a, b) => a.delivery_start_utc.localeCompare(b.delivery_start_utc));
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Time</TableHead>
-          <TableHead className="text-right">P50 change</TableHead>
-          <TableHead className="text-right">High risk</TableHead>
-          <TableHead className="text-right">Low risk</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {largest.map((point) => (
-          <TableRow key={point.delivery_start_utc}>
-            <TableCell>{formatClock(point.delivery_start_utc)}</TableCell>
-            <TableCell className="text-right font-medium">{formatSignedPrice(point.p50_change)}</TableCell>
-            <TableCell className="text-right">{formatPoints(point.p_spike_high_change)}</TableCell>
-            <TableCell className="text-right">{formatPoints(point.p_spike_low_change)}</TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  );
-}
-
-export function ChangesPanel() {
-  const { asOf } = useViewingTime();
-  const changes = useQuery(queries.changes(asOf));
-  const since = changes.data?.previous_origin_utc;
-  return (
-    <Panel label="Changes since the previous update" className="h-full">
-      <PanelHeader title="Largest changes" note={since ? `since ${formatDateTime(since)}` : undefined} />
-      <PanelBody className="scrollbar-thin overflow-auto px-1 pb-1">
-        <QueryState query={changes} skeleton={<SkeletonLines rows={4} className="px-3" />}>
-          {(data) => <ChangeRows changes={data} />}
         </QueryState>
       </PanelBody>
     </Panel>

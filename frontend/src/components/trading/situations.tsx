@@ -69,8 +69,8 @@ export function SituationsPanel() {
   const query = useQuery(queries.alerts(asOf));
   const { alerts, selected } = useNow();
   return (
-    <Panel label="Situations" className="h-full">
-      <PanelHeader title="Situations" note={alerts.length ? `${alerts.length} now` : undefined} />
+    <Panel label="What to check now" className="h-full">
+      <PanelHeader title="What to check now" level={1} note={alerts.length ? `${alerts.length} now` : undefined} />
       <PanelBody className="px-0 pb-0">
         <QueryState
           query={query}

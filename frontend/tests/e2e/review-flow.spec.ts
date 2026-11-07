@@ -24,7 +24,6 @@ test("reviewing a situation, from a calm hour to hindsight", async ({ page }) =>
 
   await page.goto(`/?as_of=${SPIKE}`);
   await expect(page.getByRole("heading", { name: "What to check now" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Back to latest" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Worth an expert review/ })).toHaveAttribute("aria-pressed", "true");
 
   await page.getByRole("button", { name: /Risk of an exceptionally high price/ }).click();
@@ -76,25 +75,18 @@ test("reviewing a situation, from a calm hour to hindsight", async ({ page }) =>
   await page.getByRole("main").click({ position: { x: 4, y: 4 } });
   await page.keyboard.press("l");
   await expect(page).not.toHaveURL(/as_of=/);
-  await expect(page.getByRole("button", { name: "Back to latest" })).toBeHidden();
 });
 
-test("the top bar reads in UTC and holds only the viewing controls", async ({ page }) => {
+test("there is no top bar on a wide screen", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/?as_of=${SPIKE}`);
-  const bar = page.getByRole("banner");
-  await expect(bar.getByRole("button", { name: /Viewing time Fri 23 Oct 09:00 UTC/ })).toBeVisible();
-  await expect(bar.getByText("Forecast made 09:00 UTC").first()).toBeVisible();
-  await expect(bar.getByText("Demo data")).toHaveCount(0);
-  await expect(bar.getByText("Live")).toHaveCount(0);
-  await expect(bar.getByRole("button", { name: "Show keyboard shortcuts" })).toHaveCount(0);
-
-  await bar.getByRole("button", { name: /Viewing time/ }).click();
-  await page.getByRole("combobox", { name: "Hour, UTC" }).click();
-  await page.getByRole("option", { name: "14:00" }).click();
-  await expect(page).toHaveURL(/as_of=2026-10-23T14(%3A|:)00/);
+  await expect(page.getByRole("heading", { name: "What to check now" })).toBeVisible();
+  await expect(page.getByRole("banner")).toHaveCount(0);
+  await expect(page.getByRole("group", { name: "Viewing time" })).toHaveCount(0);
+  await expect(page.getByText("Forecast made")).toHaveCount(0);
 });
 
-test("page content reads in UTC, the same as the top bar", async ({ page }) => {
+test("page content reads in UTC", async ({ page }) => {
   await page.goto(`/next-10h?as_of=${SPIKE}`);
   await expect(page.locator("tbody tr").first()).toContainText("09:00");
   await expect(page.getByText("times in UTC")).toBeVisible();
@@ -140,9 +132,11 @@ test("the command menu and shortcuts open from the keyboard", async ({ page }) =
 
 test("replay moves the viewing time forward and pauses", async ({ page }) => {
   await page.goto(`/?as_of=${SPIKE}`);
-  await page.getByRole("button", { name: "Replay hour by hour" }).click();
+  await expect(page.getByRole("button", { name: "Review situation" })).toBeVisible();
+  await page.getByRole("main").click({ position: { x: 4, y: 4 } });
+  await page.keyboard.press("r");
   await expect(page).toHaveURL(/as_of=2026-10-23T1[01]/, { timeout: 5000 });
-  await page.getByRole("button", { name: "Pause the replay" }).click();
+  await page.keyboard.press("r");
   const paused = page.url();
   await page.waitForTimeout(2500);
   expect(page.url()).toBe(paused);

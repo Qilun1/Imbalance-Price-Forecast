@@ -14,11 +14,23 @@ export function Panel({ label, className, children }: { label: string; className
   );
 }
 
-export function PanelHeader({ title, note, children }: { title: string; note?: ReactNode; children?: ReactNode }) {
+/** `level` 1 makes the panel title the page heading, in the same look, where a screen has no title row. */
+export function PanelHeader({
+  title,
+  note,
+  level = 2,
+  children,
+}: {
+  title: string;
+  note?: ReactNode;
+  level?: 1 | 2;
+  children?: ReactNode;
+}) {
+  const Heading = level === 1 ? "h1" : "h2";
   return (
     <header className="flex min-h-10 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 pt-3 pb-2">
       <div className="flex min-w-0 items-baseline gap-2">
-        <h2 className="eyebrow text-stone">{title}</h2>
+        <Heading className="eyebrow text-stone">{title}</Heading>
         {note ? <p className="truncate text-xs text-muted-foreground">{note}</p> : null}
       </div>
       {children ? <div className="flex shrink-0 items-center gap-2">{children}</div> : null}

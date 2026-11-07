@@ -15,7 +15,6 @@ import { addHours, formatBetter, formatCount, formatPercent, formatScore, PRICE_
 import { useViewingTime } from "@/lib/realtime/viewing-time";
 
 import { Unit } from "./cells";
-import { HorizonChart } from "./horizon-chart";
 import { KpiCard, KpiCardSkeleton } from "./kpi-card";
 import { PageHeader } from "./page-header";
 import { Panel, PanelBody, PanelHeader, PanelMessage, SkeletonLines } from "./panel";
@@ -203,7 +202,7 @@ export function HindsightScreen() {
         )}
       </QueryState>
 
-      <div className="grid shrink-0 gap-3 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div className="shrink-0">
         <Panel label="Forecast against what happened" className="h-80">
           <PanelHeader title="Forecast vs actual" note={`Diagnostic, in ${PRICE_UNIT}, times in UTC`}>
             <Choice
@@ -225,23 +224,6 @@ export function HindsightScreen() {
               skeleton={<Skeleton className="h-full w-full" />}
             >
               {(data) => <HindsightChart points={data.points} leadHours={data.lead_hours} />}
-            </QueryState>
-          </PanelBody>
-        </Panel>
-        <Panel label="Error by hours ahead" className="h-80">
-          <PanelHeader title="Error by hours ahead" note={`Diagnostic, MAE in ${PRICE_UNIT}`} />
-          <PanelBody>
-            <QueryState
-              query={performance}
-              isEmpty={(data) => !data.diagnostic.model}
-              empty={
-                <PanelMessage icon={CircleDashed} title="Nothing to score yet">
-                  This period has no realised prices at the viewing time.
-                </PanelMessage>
-              }
-              skeleton={<Skeleton className="h-full w-full" />}
-            >
-              {(data) => (data.diagnostic.model ? <HorizonChart model={data.diagnostic.model} baseline={data.diagnostic.baseline} /> : null)}
             </QueryState>
           </PanelBody>
         </Panel>

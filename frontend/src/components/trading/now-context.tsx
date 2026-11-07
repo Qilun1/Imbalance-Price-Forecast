@@ -22,7 +22,7 @@ const Context = createContext<NowState | null>(null);
 
 const NONE: readonly Alert[] = [];
 
-/** Selecting a situation scopes the chart, drivers and changes on the Now screen to its window. */
+/** Selecting a situation highlights its window in the chart on the Now screen. */
 export function NowProvider({ children }: { children: ReactNode }) {
   const { asOf } = useViewingTime();
   const { data } = useQuery(queries.alerts(asOf));

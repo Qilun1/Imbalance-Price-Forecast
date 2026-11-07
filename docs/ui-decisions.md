@@ -118,17 +118,24 @@ The prompt ranks above `DESIGN.md`, which ranks above skills.
 - **Exposure check** moved from a side panel into a sheet. The panel pushed three table columns off screen at
   1440 px, and the quarter-hour table is what the demo must show.
 - **Sidebar** drops to the icon rail below 1024 px, so 768 px keeps its width for data.
-- **The timeline asks the API with no viewing time**, on purpose: it is navigation, and must lead forward as
-  well as back. Everything else follows the viewing time.
-- **Top bar** holds the viewing time, the forecast stamp and the Ctrl K button. Team decision, 7 Nov: the data
-  mode badge, connection status and shortcuts button are gone. `?` and Ctrl K still open the shortcuts, and
-  the screen no longer says whether it shows mock or real data.
-- **Past views** carry no notice, team decision, 7 Nov. The viewing time and "Back to latest" show the state.
-- **UTC:** everything that names the viewing time reads UTC, team decision, 7 Nov: the top bar, its picker, the
-  timeline hint and the Ctrl K jumps. Page content, including tables and chart axes, stays in Helsinki time.
+- **No top bar**, team decision, 7 Nov. The viewing time controls, the forecast stamp, the Ctrl K button and
+  the situation timeline under them are gone. The viewing time still lives in the URL (`?as_of=`), and the
+  keys still move it: `←` `→` an hour, Shift for a day, `L` latest, `R` replay, Ctrl K the command menu,
+  `?` the shortcuts. Phones keep a bar with only the screen links, because the sidebar is hidden there.
+- **Past views** carry no notice, team decision, 7 Nov.
+- **UTC:** everything that names the viewing time reads UTC, team decision, 7 Nov: the Ctrl K jumps. Page
+  content, including tables and chart axes, stays in Helsinki time.
 - **Situation log** has its own row below 1792 px (`--breakpoint-3xl`), with Official scores under it. Its six
   columns need about 920 px to show whole titles, and truncating them hid what each situation was. Below that
   width, as at 768 px, the table scrolls sideways rather than cut a title.
+- **Now screen** drops the Main factors and Largest changes panels, team decision, 7 Nov. The forecast chart
+  takes their space. Main factors stay in the Next 10 h table and the situation sheet, and the largest
+  revision stays in the KPI row.
+- **Now screen title** moved into the situations panel, team decision, 7 Nov. The panel header reads "What to
+  check now" with the count, in the panel title style, and is the page's `h1`. The large title row is gone.
+  On wide screens the forecast chart is on the left and that panel on the right; stacked, it stays first.
+- **Hindsight** drops the Error by hours ahead chart, team decision, 7 Nov. Forecast vs actual takes the full
+  width. The API still returns the scores by hour ahead.
 
 ## Libraries beyond the prompt's list
 

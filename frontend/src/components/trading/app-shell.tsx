@@ -20,9 +20,7 @@ import { formatDateTimeUtc } from "@/lib/format";
 import { useConnectionEvents } from "@/lib/realtime/connection";
 import { useViewingTime } from "@/lib/realtime/viewing-time";
 
-import { SituationTimeline } from "./situation-timeline";
-import { SCREENS, Sidebar, useScreenHref } from "./sidebar";
-import { TopBar } from "./top-bar";
+import { CompactNav, SCREENS, Sidebar, useScreenHref } from "./sidebar";
 import { SHORTCUTS, useShortcuts } from "./use-shortcuts";
 
 function CommandMenu({ open, onOpenChange, onShortcuts }: { open: boolean; onOpenChange: (open: boolean) => void; onShortcuts: () => void }) {
@@ -140,8 +138,10 @@ export function AppShell({ startsAsRail, children }: { startsAsRail: boolean; ch
       </a>
       <Sidebar startsAsRail={startsAsRail} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar onCommand={showCommand} />
-        <SituationTimeline />
+        {/* Phones only: the sidebar is hidden there, so the screens are listed here. */}
+        <header className="flex shrink-0 items-center border-b bg-canvas px-3 py-2 md:hidden">
+          <CompactNav />
+        </header>
         <main id="main" className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-3">
           {children}
         </main>
