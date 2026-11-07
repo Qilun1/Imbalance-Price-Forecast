@@ -16,7 +16,9 @@ from . import store as db
 from .contract import HORIZON_STEPS as HORIZON, SPIKE_MARGIN, STEP  # noqa: F401
 
 FEATURE_SET = "v1"                 # default feature set
-FEATURE_SETS = ("v1", "v2", "v2p", "v3")   # v2+ = v1 + vintaged NWP proxies; model per set in nwp.NWP_SPECS
+FEATURE_SETS = ("v1", "v2", "v2p", "v3", "v4", "v4m")   # v2+ = v1 + vintaged NWP proxies; model per set in nwp.NWP_SPECS
+WIND_OBS_SETS = {"v4", "v4m"}     # + observed wind error vs Fingrid day-ahead forecast (Fingrid 75 vs 246)
+WIND_ERR_TAUS_H = (1, 3, 6)       # decay time constants (h) of the observed error with lead time
 
 LAG_SERIES = [
     "fi_imbalance_price", "fi_mfrr_direction", "fi_mfrr_up_price", "fi_mfrr_down_price",
@@ -82,15 +84,57 @@ def lag_window(store: Store, sid: str, last: np.ndarray, o: np.ndarray, k: int) 
     return np.column_stack([store.get(sid, last - j, o) for j in range(k)])
 
 
-def build(store: Store, origins: pd.DatetimeIndex, with_targets: bool, nwp: tuple | None = None) -> pd.DataFrame:
-    """Feature rows for (origin, step). nwp = (wind RunTable, temp RunTable) adds the v2 weather columns."""
+def build(store: Store, origins: pd.DatetimeIndex, with_targets: bool, nwp: tuple | None = None,
+          wind_obs: bool = False) -> pd.DataFrame:
+    """Feature rows for (origin, step). nwp = (wind RunTable, temp RunTable) adds the v2 weather columns;
+    wind_obs adds the observed wind-error columns (v4)."""
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)   # nanmean of all-NaN windows -> NaN is intended
         df = _build(store, origins, with_targets)
         if nwp is not None:
             df = add_nwp(df, *nwp)
+        if wind_obs:
+            df = add_wind_obs(df, store)
         return df
+
+
+def add_wind_obs(df: pd.DataFrame, store: Store) -> pd.DataFrame:
+    """v4: observed wind error = actual wind generation (Fingrid 75) minus Fingrid's day-ahead wind
+    forecast for the same quarter-hours, from the latest rows usable at the origin, and its expected
+    persistence at the delivery time (exponential decay with lead time). Both series are read with
+    Store.get, so the availability rule applies."""
+    out = df.copy()
+    origins = pd.DatetimeIndex(df["forecast_origin_utc"].unique()).as_unit("ns")
+    o_ns = origins.asi8
+    li = store.latest_index("fi_wind_production", o_ns)
+    act = lag_window(store, "fi_wind_production", li, o_ns, 4)
+    fc = lag_window(store, "fi_wind_fc_da", li, o_ns, 4)
+    err = act - fc
+    per_origin = pd.DataFrame({
+        "wind_err_last": err[:, 0],
+        "wind_err_mean4": np.nanmean(err, axis=1),
+        "wind_err_trend_1h": err[:, 0] - err[:, 3],
+        "wind_act_last": act[:, 0],
+        "wind_obs_idx": li.astype(float),
+    }, index=origins)
+    o_key = pd.DatetimeIndex(df["forecast_origin_utc"]).as_unit("ns")
+    rows = per_origin.reindex(o_key)
+    for c in ["wind_err_last", "wind_err_mean4", "wind_err_trend_1h", "wind_act_last"]:
+        out[c] = rows[c].to_numpy()
+    d_idx = store.index_of(df["delivery_start_utc"])
+    lead_h = (d_idx - rows["wind_obs_idx"].to_numpy()) / 4.0
+    out["wind_obs_lead_h"] = lead_h
+    for tau in WIND_ERR_TAUS_H:
+        out[f"wind_err_decay_{tau}h"] = out["wind_err_last"] * np.exp(-lead_h / tau)
+    out["wind_fc_corrected"] = out["wind_fc"] + out["wind_err_decay_3h"]
+    out["resid_load_corrected"] = out["resid_load_fc"] - out["wind_err_decay_3h"]
+    # data_cutoff_utc must cover the newest realised quarter-hour now used
+    wind_cut = store.grid[np.clip(li, 0, None)].asi8
+    cut = np.maximum(df["data_cutoff_utc"].dt.as_unit("ns").astype("int64").to_numpy(),
+                     pd.Series(wind_cut, index=origins).reindex(o_key).to_numpy())
+    out["data_cutoff_utc"] = pd.to_datetime(np.minimum(cut, o_key.asi8), utc=True)
+    return out
 
 
 def add_nwp(df: pd.DataFrame, wind, temp) -> pd.DataFrame:
@@ -269,4 +313,5 @@ def build_table(origins: pd.DatetimeIndex | None = None, with_targets: bool = Tr
         first = (st.grid[0] + pd.Timedelta(hours=27)).ceil("h")
         last = (st.grid[-1] - pd.Timedelta(hours=9, minutes=45)).floor("h")
         origins = pd.date_range(first, last, freq="h")
-    return build(st, pd.DatetimeIndex(origins), with_targets=with_targets, nwp=nwp_tables)
+    return build(st, pd.DatetimeIndex(origins), with_targets=with_targets, nwp=nwp_tables,
+                 wind_obs=feature_set in WIND_OBS_SETS)
