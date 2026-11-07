@@ -103,44 +103,50 @@ uv run python -m tools.cli ingest openmeteo --models ecmwf_ifs --group wind
 uv run python -m tools.cli ingest openmeteo --models metno_nordic --group wind
 uv run python -m tools.cli ingest openmeteo --models metno_nordic --group pop
 # 2. Feature tables, then four structural mixture members (train val + final, score, test export):
-#    v4 / v4m for steps 9-40, v9 / v9m (+ fresh Fingrid grid state) for steps 1-8
+#    v4 / v4m for steps 9-40, v9d / v9md (+ fresh Fingrid grid state, direction persistence and spike
+#    clustering at the origin) for steps 1-8
 uv run python -m tools.cli features --set v4
 uv run python -m tools.cli features --set v4m
-uv run python -m tools.cli features --set v9
-uv run python -m tools.cli features --set v9m
+uv run python -m tools.cli features --set v9d
+uv run python -m tools.cli features --set v9md
 uv run python -m tools.training.mixture_pipeline --config tools/training/configs/mix_v4b.yaml
 uv run python -m tools.training.mixture_pipeline --config tools/training/configs/mix_v4mb.yaml
-uv run python -m tools.training.mixture_pipeline --config tools/training/configs/mix_v9b.yaml
-uv run python -m tools.training.mixture_pipeline --config tools/training/configs/mix_v9mb.yaml
+uv run python -m tools.training.mixture_pipeline --config tools/training/configs/mix_v9db.yaml
+uv run python -m tools.training.mixture_pipeline --config tools/training/configs/mix_v9mdb.yaml
 # 3. Bagging members per config (default fit re-read with the consistent mixture settings = s0; seed 1;
 #    seed 2 on the last 7 weeks before the cutoff; seed 3 with asinh target). One run per member.
-for C in mix_v4b mix_v4mb mix_v9b mix_v9mb; do for P in val test; do S=$([ $P = val ] && echo -val); \
+for C in mix_v4b mix_v4mb mix_v9db mix_v9mdb; do for P in val test; do S=$([ $P = val ] && echo -val); \
   M=$([ $P = val ] && echo val || echo final); W=$([ $P = val ] && echo 2026-07-20 || echo 2026-08-17); \
   uv run python -m tools.eval.mix_variants --model $C$S --period $P --widen 2.0 --modes component50 --tails exp; \
   cp static_data/work/submissions/${C}${S}__w2.00_component50_exp_$P.csv static_data/work/submissions/${C}_s0${S}_$P.csv; \
   uv run python -m tools.training.bag --config tools/training/configs/$C.yaml --member s1  --mode $M --widen 2.0 --widen-mode component50 --tail exp; \
   uv run python -m tools.training.bag --config tools/training/configs/$C.yaml --member s2w --mode $M --train-start $W --widen 2.0 --widen-mode component50 --tail exp; \
   uv run python -m tools.training.bag --config tools/training/configs/$C.yaml --member s3a --mode $M --widen 2.0 --widen-mode component50 --tail exp; done; done
-# 4. Lead-time split per member (v9 for steps 1-8), 8-member average, validation-fitted band widths
+# 4. Lead-time split per member (v9d for steps 1-8), 8-member average, validation-fitted band widths
 for P in val test; do S=$([ $P = val ] && echo -val); M=""; for V in s0 s1 s2w s3a; do \
-  uv run python -m tools.eval.step_split --name split_v9b_v4b_$V --early mix_v9b_$V$S --late mix_v4b_$V$S --period $P; \
-  uv run python -m tools.eval.step_split --name split_v9mb_v4mb_$V --early mix_v9mb_$V$S --late mix_v4mb_$V$S --period $P; \
-  M="$M split_v9b_v4b_$V split_v9mb_v4mb_$V"; done; \
-  uv run python -m tools.eval.ensemble --name ens_bag8 --members $M --period $P; done
-uv run python -m tools.eval.band_width --model ens_bag8 --apply
-# 5. Previous chain (default members, x1.4 band, spike logit shift, band widths) = ens_mixg_spk_bw
+  uv run python -m tools.eval.step_split --name split_v9db_v4b_$V --early mix_v9db_$V$S --late mix_v4b_$V$S --period $P; \
+  uv run python -m tools.eval.step_split --name split_v9mdb_v4mb_$V --early mix_v9mdb_$V$S --late mix_v4mb_$V$S --period $P; \
+  M="$M split_v9db_v4b_$V split_v9mdb_v4mb_$V"; done; \
+  uv run python -m tools.eval.ensemble --name ens_bag8d --members $M --period $P; done
+uv run python -m tools.eval.band_width --model ens_bag8d --apply
+# 5. Previous chain (default members, x1.4 band, spike logit shift, band widths) = ens_mixgd_spk_bw
 for P in val test; do S=$([ $P = val ] && echo -val); \
-  uv run python -m tools.eval.step_split --name split_v9b_v4b --early mix_v9b$S --late mix_v4b$S --period $P; \
-  uv run python -m tools.eval.step_split --name split_v9mb_v4mb --early mix_v9mb$S --late mix_v4mb$S --period $P; \
-  uv run python -m tools.eval.ensemble --name ens_mixg --members split_v9b_v4b split_v9mb_v4mb --period $P; done
-uv run python -m tools.eval.spike_shift --model ens_mixg --apply
-uv run python -m tools.eval.band_width --model ens_mixg_spk --apply
-# 6. Spike hedge: spike probabilities averaged 50/50 with the previous chain (ens_mixg_spk_bw)
-for P in val test; do uv run python -m tools.eval.spike_hedge --base ens_bag8_bw --other ens_mixg_spk_bw --name ens_final --period $P; done
+  uv run python -m tools.eval.step_split --name split_v9db_v4b --early mix_v9db$S --late mix_v4b$S --period $P; \
+  uv run python -m tools.eval.step_split --name split_v9mdb_v4mb --early mix_v9mdb$S --late mix_v4mb$S --period $P; \
+  uv run python -m tools.eval.ensemble --name ens_mixgd --members split_v9db_v4b split_v9mdb_v4mb --period $P; done
+uv run python -m tools.eval.spike_shift --model ens_mixgd --apply
+uv run python -m tools.eval.band_width --model ens_mixgd_spk --apply
+# 6. Spike hedge: spike probabilities averaged 50/50 with the previous chain (ens_mixgd_spk_bw)
+for P in val test; do uv run python -m tools.eval.spike_hedge --base ens_bag8d_bw --other ens_mixgd_spk_bw --name ens_finald --period $P; done
+# 7. Dashboard: load the submission into the forecast store (the API's default model in real mode)
+uv run python -m tools.eval.import_submission --model ens_finald --period test
+uv run python -m tools.eval.import_submission --model ens_finald --period val
 ```
 
-The submission is `static_data/work/submissions/ens_final_test.csv` (submit it as
-`forecast_backtest.csv`); every step runs the organiser's validator or scorer. More commands:
+The submission is `static_data/work/submissions/ens_finald_test.csv` (submit it as
+`forecast_backtest.csv`); every step runs the organiser's validator or scorer. The previous
+submission `ens_final` is kept as the fallback: the same chain with v9 / v9m (`mix_v9b`, `mix_v9mb`) in
+place of v9d / v9md and without the `d` in the names (`ens_bag8`, `ens_mixg`, `ens_final`). More commands:
 `tools/README.md`. Dashboard: `backend/api/README.md` (API, runs on mock data without licensed files)
 and `frontend/README.md`. Data sources and licences: `docs/SOURCES_AND_LICENCES.md`.
 

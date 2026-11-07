@@ -2,9 +2,11 @@
 
 IMBALANCE_DATA_MODE   "mock" (default, invented data, needs nothing else) or "real" (needs the
                       ingested store and the forecasts in backend/infer_data).
-IMBALANCE_MODEL_VAL   model answering for validation origins, default lgbm_v1-val. Its forecasts
-                      are out of sample; lgbm_v1 is in-sample there, so never show it for that period.
-IMBALANCE_MODEL_TEST  model answering for test origins, default lgbm_v1.
+IMBALANCE_MODEL_VAL   model answering for validation origins, default ens_finald-val (the submission's
+                      validation version). Its forecasts are out of sample; the final ens_finald is
+                      in-sample there, so never show it for that period.
+IMBALANCE_MODEL_TEST  model answering for test origins, default ens_finald (the submission). Load both
+                      with tools/eval/import_submission.py after building the submission (root README).
 IMBALANCE_CHALLENGER_VAL / IMBALANCE_CHALLENGER_TEST
                       second model for the conflicting-signals alert, default lgbm_v2-val / lgbm_v2.
                       It must use different input data from the main model (v2 adds ECMWF weather
@@ -68,10 +70,10 @@ def load_settings() -> Settings:
         return Settings("mock", (Period("mock", MOCK_MODEL, MOCK_BASELINE, challenger=MOCK_CHALLENGER, notes=MOCK_NOTES),), MOCK_DB, MOCK_DB)
     if mode == "real":
         periods = (
-            Period("validation", os.environ.get("IMBALANCE_MODEL_VAL", "lgbm_v1-val"), "baseline-val",
+            Period("validation", os.environ.get("IMBALANCE_MODEL_VAL", "ens_finald-val"), "baseline-val",
                    VALIDATION_FIRST_ORIGIN, _challenger("IMBALANCE_CHALLENGER_VAL", "lgbm_v2-val"),
                    _challenger("IMBALANCE_NOTES_VAL", "alerts-val")),
-            Period("test", os.environ.get("IMBALANCE_MODEL_TEST", "lgbm_v1"), "baseline-test", TEST_FIRST_ORIGIN,
+            Period("test", os.environ.get("IMBALANCE_MODEL_TEST", "ens_finald"), "baseline-test", TEST_FIRST_ORIGIN,
                    _challenger("IMBALANCE_CHALLENGER_TEST", "lgbm_v2"), _challenger("IMBALANCE_NOTES_TEST", "alerts")),
         )
         return Settings("real", periods, INFER_DB, STATIC_DB)

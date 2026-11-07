@@ -1,10 +1,12 @@
 # Data sources, services and components
 
 Team WeatherSensAI, Since AI 2026, Turku Energia challenge. Checked on 7 Nov 2026 against each
-provider's terms (links below). The submitted forecast is `ens_mixg` with a spike shift and band widths: the mean of two
-lead-time-split structural mixture models, ECMWF (`mix_v9b` for steps 1-8, `mix_v4b` after) and MET
-Nordic (`mix_v9mb` for steps 1-8, `mix_v4mb` after), with one logit shift per spike class and one band
-width per lead block and direction certainty, fitted on validation.
+provider's terms (links below). The submitted forecast is `ens_finald`: the mean of eight bagged,
+lead-time-split structural mixture models, ECMWF (`mix_v9db` for steps 1-8, `mix_v4b` after) and MET
+Nordic (`mix_v9mdb` for steps 1-8, `mix_v4mb` after), four bagging members each, with one band width
+per lead block and direction certainty fitted on validation, and spike probabilities averaged with the
+same members' unbagged chain (spike logit shift, band widths). Recipe: "Reproduce the submission" in
+the root `README.md`. v9d / v9md add no source: they read the same Fingrid and Nord Pool series as v9.
 
 Every time-stamped input reaches the models only through the store's availability-masked reader
 (`backend/imbalance/`). Each row is usable from its `first_usable_origin_utc`. For sources we added,

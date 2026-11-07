@@ -122,7 +122,11 @@ NWP_SPECS = {"v2": ("ecmwf_ifs", "wind"),
              "v9": ("ecmwf_ifs", "wind"),       # v4 + fresh grid state (features.add_grid_state)
              "v9m": ("metno_nordic", "pop"),
              "v10": ("ecmwf_ifs", "wind"),      # v9 + spike clustering / 24 h direction history (features.add_persistence)
-             "v10m": ("metno_nordic", "pop")}    # v4m + fresh grid state    # v4m + UMM outage messages    # v4m + second NWP model and forecast disagreement
+             "v10m": ("metno_nordic", "pop"),
+             "v9d": ("ecmwf_ifs", "wind"),      # v9 + direction persistence / spike clustering (features.add_dir_persistence)
+             "v9md": ("metno_nordic", "pop"),
+             "v11": ("ecmwf_ifs", "wind"),      # v9 + real-time mFRR prices (features.add_rt_mfrr)
+             "v11m": ("metno_nordic", "pop")}    # v4m + fresh grid state    # v4m + UMM outage messages    # v4m + second NWP model and forecast disagreement
 
 # feature set -> the OTHER NWP model, used only for its wind (disagreement = weather uncertainty proxy)
 NWP_SECOND = {"v6": "metno_nordic", "v6m": "ecmwf_ifs"}

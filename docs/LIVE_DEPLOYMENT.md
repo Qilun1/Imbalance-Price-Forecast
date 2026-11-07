@@ -51,17 +51,17 @@ the current UTC time. Ingests insert only; they never overwrite a stored row.
 At about 5 past each hour, for the new forecast time (the full hour just passed):
 
 1. Run the ingests in step 2.
-2. Build the feature rows for that forecast time (feature sets v4, v4m, v9, v9m).
+2. Build the feature rows for that forecast time (feature sets v4, v4m, v9d, v9md).
 3. Forecast with every trained member of the submission and combine them exactly as the submission
    does. The recipe is "Reproduce the submission" in the root `README.md`; follow it, since it is the
-   source of truth. Today (`ens_final`) it is: the bagged mixture members (`mix_v4b`, `mix_v4mb`,
-   `mix_v9b`, `mix_v9mb`, each `s0`/`s1`/`s2w`/`s3a`; `infer()` in
-   `tools/training/mixture_pipeline.py`), the lead-time split per member (v9 for steps 1–8,
+   source of truth. Today (`ens_finald`) it is: the bagged mixture members (`mix_v4b`, `mix_v4mb`,
+   `mix_v9db`, `mix_v9mdb`, each `s0`/`s1`/`s2w`/`s3a`; `infer()` in
+   `tools/training/mixture_pipeline.py`), the lead-time split per member (v9d for steps 1–8,
    `tools/eval/step_split.py`), the 8-member average (`tools/eval/ensemble.py`), the band widths
-   (`tools/eval/band_width.py`), and the spike hedge with the previous chain `ens_mixg_spk_bw`
+   (`tools/eval/band_width.py`), and the spike hedge with the previous chain `ens_mixgd_spk_bw`
    (`tools/eval/spike_hedge.py`). These run on whole exported CSVs today; call them on one forecast
    time instead. Use the fitted values as they are: never refit them on live data.
-4. Write the result with `imbalance.forecasts.write()` under one model name, e.g. `ens_final_live`
+4. Write the result with `imbalance.forecasts.write()` under one model name, e.g. `ens_finald_live`
    (`tools/eval/import_submission.py` does the same for a whole CSV).
 5. Restart the API (step 4): it reads forecasts once at start-up. Or add a reload.
 
@@ -74,7 +74,7 @@ Start without `--reload`, in real mode, with the live model:
 
 ```powershell
 $env:IMBALANCE_DATA_MODE="real"
-$env:IMBALANCE_MODEL_TEST="ens_final_live"        # the model name the hourly job writes (step 3)
+$env:IMBALANCE_MODEL_TEST="ens_finald_live"        # the model name the hourly job writes (step 3)
 .venv\Scripts\python.exe -m uvicorn backend.api.main:app --port 8000
 ```
 

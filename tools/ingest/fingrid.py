@@ -29,7 +29,8 @@ from tools.ingest.http import Client
 URL = "https://data.fingrid.fi/api/datasets/{id}/data"
 
 # dataset_id: (series_id, unit, availability rule)
-# rule ("lag", minutes after the END of the quarter-hour, then next full hour)
+# rule ("lag", minutes after the END of the quarter-hour, then next full hour; negative for data
+#        published before its quarter-hour ends, e.g. real-time mFRR prices)
 DATASETS = {
     # in the starter package (same series_id, the organiser's rules; only extended past the package end)
     319: ("fi_imbalance_price", "EUR/MWh", ("lag", 60)),
@@ -55,6 +56,19 @@ DATASETS = {
     399: ("fi_bess_charge_rt", "MW", ("lag", 15)),
     181: ("fi_wind_production_rt", "MW", ("lag", 15)),
     193: ("fi_consumption_rt", "MW", ("lag", 15)),
+    # Real-time mFRR energy prices (published BEFORE or AT the start of the market time unit they price;
+    # timestamp_utc = start of that quarter-hour, so the lag is negative relative to its end).
+    # 400: scheduled activation price, published by Fingrid at the scheduled activation, 7.5 min before
+    #      the MTU (documented; probe: tools/eval/fingrid_lead_probe.py). We assume only "by MTU start
+    #      - 2.5 min" (5 min safety margin): end - 17.5 min = start - 2.5 min, then the next full hour.
+    #      So at a full-hour origin T only the quarter-hour starting at T (step 1) and earlier ones
+    #      are usable; nothing later.
+    400: ("fi_mfrr_sa_price_rt", "EUR/MWh", ("lag", -17.5)),
+    # 401 / 402: direct activation prices, published at the direct activation, which happens BEFORE the
+    #      MTU they apply to. We treat them as usable only 10 min after that MTU starts (end - 5 min),
+    #      so a full-hour origin T sees at most the quarter-hour starting at T - 15 min, never step 1.
+    401: ("fi_mfrr_da_up_price_rt", "EUR/MWh", ("lag", -5)),
+    402: ("fi_mfrr_da_down_price_rt", "EUR/MWh", ("lag", -5)),
 }
 FORECAST_DATASETS = {165, 166, 245, 246, 247, 248, 241, 242}   # never via the API (latest version only)
 PACKAGE_SERIES = {319, 244, 106, 375, 376, 369, 124, 74}

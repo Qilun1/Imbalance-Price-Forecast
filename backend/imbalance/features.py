@@ -16,10 +16,12 @@ from . import store as db
 from .contract import HORIZON_STEPS as HORIZON, SPIKE_MARGIN, STEP  # noqa: F401
 
 FEATURE_SET = "v1"                 # default feature set
-FEATURE_SETS = ("v1", "v2", "v2p", "v3", "v4", "v4m", "v5", "v5m", "v6", "v6m", "v7", "v7m", "v8", "v8m", "v9", "v9m", "v10", "v10m")   # v2+ = v1 + vintaged NWP proxies; model per set in nwp.NWP_SPECS
-WIND_OBS_SETS = {"v4", "v4m", "v5", "v5m", "v6", "v6m", "v7", "v7m", "v8", "v8m", "v9", "v9m", "v10", "v10m"}
-GRID_SETS = {"v9", "v9m", "v10", "v10m"}   # + fresh grid state at the origin (Fingrid real-time, 15 min rule)
+FEATURE_SETS = ("v1", "v2", "v2p", "v3", "v4", "v4m", "v5", "v5m", "v6", "v6m", "v7", "v7m", "v8", "v8m", "v9", "v9m", "v10", "v10m", "v11", "v11m", "v9d", "v9md")   # v2+ = v1 + vintaged NWP proxies; model per set in nwp.NWP_SPECS
+WIND_OBS_SETS = {"v4", "v4m", "v5", "v5m", "v6", "v6m", "v7", "v7m", "v8", "v8m", "v9", "v9m", "v10", "v10m", "v11", "v11m", "v9d", "v9md"}
+GRID_SETS = {"v9", "v9m", "v10", "v10m", "v11", "v11m", "v9d", "v9md"}   # + fresh grid state at the origin (Fingrid real-time, 15 min rule)
+DIRHIST_SETS = {"v9d", "v9md"}    # + direction persistence and spike clustering at the origin (add_dir_persistence)
 PERSIST_SETS = {"v10", "v10m"}    # + spike clustering and 24 h direction history at the origin (add_persistence)
+RT_MFRR_SETS = {"v11", "v11m"}   # + real-time mFRR prices (Fingrid 400 / 401 / 402, add_rt_mfrr)
 UMM_SETS = {"v8", "v8m"}          # + Nord Pool UMM outage messages, each version from its publication time
 SYSTEM_SETS = {"v7", "v7m"}       # + system stress: nuclear / hydro (Fingrid 188 / 191) and import-link saturation     # + observed wind error vs Fingrid day-ahead forecast (Fingrid 75 vs 246)
 HIST_SETS = {"v5", "v5m"}         # + out-of-sample long-history direction head (tools/training/hist_heads.py)
@@ -89,10 +91,29 @@ def lag_window(store: Store, sid: str, last: np.ndarray, o: np.ndarray, k: int) 
     return np.column_stack([store.get(sid, last - j, o) for j in range(k)])
 
 
+def _first_true_age(mask: np.ndarray, cap: int) -> np.ndarray:
+    """Per row: index of the first True in a newest-first window (= quarter-hours ago), cap if none."""
+    any_true = mask.any(axis=1)
+    age = mask.argmax(axis=1).astype(float)
+    age[~any_true] = float(cap)
+    return age
+
+
+def _sign_changes(d: np.ndarray) -> np.ndarray:
+    """Per row: sign flips between consecutive non-zero, non-NaN directions."""
+    out = np.zeros(len(d))
+    for i in range(len(d)):
+        seq = d[i][~np.isnan(d[i])]
+        seq = seq[seq != 0]
+        if seq.size > 1:
+            out[i] = int((np.diff(np.sign(seq)) != 0).sum())
+    return out
+
+
 def build(store: Store, origins: pd.DatetimeIndex, with_targets: bool, nwp: tuple | None = None,
           wind_obs: bool = False, hist: pd.DataFrame | None = None, nwp2=None,
           system: bool = False, umm: pd.DataFrame | None = None, grid: bool = False,
-          persist: bool = False) -> pd.DataFrame:
+          persist: bool = False, rt_mfrr: bool = False, dir_hist: bool = False) -> pd.DataFrame:
     """Feature rows for (origin, step). nwp = (wind RunTable, temp RunTable) adds the v2 weather columns;
     wind_obs adds the observed wind-error columns (v4)."""
     import warnings
@@ -105,6 +126,8 @@ def build(store: Store, origins: pd.DatetimeIndex, with_targets: bool, nwp: tupl
             df = add_nwp_spread(df, nwp2)
         if wind_obs:
             df = add_wind_obs(df, store)
+        if dir_hist:
+            df = add_dir_persistence(df, store)
         if hist is not None:
             df = add_hist(df, hist)
         if system:
@@ -113,6 +136,8 @@ def build(store: Store, origins: pd.DatetimeIndex, with_targets: bool, nwp: tupl
             df = add_grid_state(df, store)
         if persist:
             df = add_persistence(df, store)
+        if rt_mfrr:
+            df = add_rt_mfrr(df, store)
         if umm is not None:
             from .umm import add_umm
             df = add_umm(df, umm)
@@ -332,6 +357,94 @@ def add_persistence(df: pd.DataFrame, store: Store) -> pd.DataFrame:
     return out
 
 
+def add_dir_persistence(df: pd.DataFrame, store: Store) -> pd.DataFrame:
+    """v9d: direction persistence and spike clustering from fi_mfrr_direction and the realised spread
+    (fi_imbalance_price - fi_spot_price), read only from rows usable at the origin. No new source.
+    Targets the three-class direction Brier and the spike Briers. Origin-level:
+    - share of up / down / none quarter-hours in the last 4 / 8 / 16 usable quarter-hours;
+    - quarter-hours since the direction last differed from the latest one (96 = not in 24 h), and
+      sign flips in the last 16;
+    - spike quarter-hours (|spread| > SPIKE_MARGIN) in the last 4 / 12 / 48; quarter-hours since the
+      last high / low / any spike (96 = none in 24 h); max |spread| over the last 16."""
+    out = df.copy()
+    origins = pd.DatetimeIndex(df["forecast_origin_utc"].unique()).as_unit("ns")
+    o_ns = origins.asi8
+    K = 96
+    feats = {}
+    ld = store.latest_index("fi_mfrr_direction", o_ns)
+    d = lag_window(store, "fi_mfrr_direction", ld, o_ns, K)
+    cur = d[:, [0]]
+    for k in (4, 8, 16):
+        w = d[:, :k]
+        m = ~np.isnan(w)
+        denom = np.maximum(m.sum(1), 1)
+        feats[f"dir_frac_up_{k}"] = np.where(m.any(1), ((w == 1) & m).sum(1) / denom, np.nan)
+        feats[f"dir_frac_dn_{k}"] = np.where(m.any(1), ((w == -1) & m).sum(1) / denom, np.nan)
+        feats[f"dir_frac_none_{k}"] = np.where(m.any(1), ((w == 0) & m).sum(1) / denom, np.nan)
+    differs = (d != cur) & ~np.isnan(d) & ~np.isnan(cur)
+    feats["dir_time_since_flip"] = _first_true_age(differs, K)
+    feats["dir_flips_16"] = _sign_changes(d[:, :16])
+    li = store.latest_index("fi_imbalance_price", o_ns)
+    spr = (lag_window(store, "fi_imbalance_price", li, o_ns, K)
+           - lag_window(store, "fi_spot_price", li, o_ns, K))
+    hi, lo = spr > SPIKE_MARGIN, spr < -SPIKE_MARGIN
+    anyspk = hi | lo
+    for k in (4, 12, 48):
+        feats[f"spike_count_{k}"] = np.nansum(anyspk[:, :k].astype(float), axis=1)
+    feats["spike_hi_time_since"] = _first_true_age(hi, K)
+    feats["spike_lo_time_since"] = _first_true_age(lo, K)
+    feats["spike_any_time_since"] = _first_true_age(anyspk, K)
+    feats["spread_absmax_16"] = np.nanmax(np.abs(spr[:, :16]), axis=1)
+    per_origin = pd.DataFrame(feats, index=origins)
+    o_key = pd.DatetimeIndex(df["forecast_origin_utc"]).as_unit("ns")
+    rows = per_origin.reindex(o_key)
+    for c in per_origin.columns:
+        out[c] = rows[c].to_numpy()
+    cut = df["data_cutoff_utc"].dt.as_unit("ns").astype("int64").to_numpy()
+    for idx in (ld, li):
+        c = pd.Series(store.grid[np.clip(idx, 0, None)].asi8, index=origins).reindex(o_key).to_numpy()
+        cut = np.maximum(cut, c)
+    out["data_cutoff_utc"] = pd.to_datetime(np.minimum(cut, o_key.asi8), utc=True)
+    return out
+
+
+def add_rt_mfrr(df: pd.DataFrame, store: Store) -> pd.DataFrame:
+    """v11: real-time mFRR prices at the origin (Fingrid 400 scheduled activation price; 401 / 402
+    direct activation prices up / down). Availability (tools/ingest/fingrid.py): 400 counts as published
+    2.5 min before its quarter-hour starts (Fingrid: 7.5 min before), so at a full-hour origin T the
+    quarter-hour starting at T is the latest usable one; 401 / 402 count as published 10 min after their
+    quarter-hour starts, so at most the quarter-hour starting at T - 15 min is usable. Every value is
+    read through Store.get with the origin, so anything not yet usable is NaN; nothing is assumed.
+
+    - rt_sa_spread_now: scheduled activation price - spot for the quarter-hour starting at the origin;
+      rt_sa_spread_step1 repeats it only on step-1 rows (NaN elsewhere), the quarter-hour it prices;
+    - rt_sa_spread_prev / rt_sa_spread_mean1h: the same for the previous quarter-hour / last 4;
+    - rt_da_up_prev / rt_da_dn_prev: direct activation price - spot in the previous quarter-hour
+      (NaN when there was no direct activation); rt_da_count1h: direct activations in the last hour."""
+    out = df.copy()
+    origins = pd.DatetimeIndex(df["forecast_origin_utc"].unique()).as_unit("ns")
+    o_ns = origins.asi8
+    o_idx = store.index_of(origins)
+    feats = {}
+    sa = np.column_stack([store.get("fi_mfrr_sa_price_rt", o_idx - j, o_ns) for j in range(5)])     # T, T-15 ... T-60
+    spot = np.column_stack([store.get("fi_spot_price", o_idx - j, o_ns) for j in range(5)])
+    sp = sa - spot
+    feats["rt_sa_spread_now"] = sp[:, 0]
+    feats["rt_sa_spread_prev"] = sp[:, 1]
+    feats["rt_sa_spread_mean1h"] = np.nanmean(sp[:, 1:5], axis=1)
+    up = np.column_stack([store.get("fi_mfrr_da_up_price_rt", o_idx - j, o_ns) for j in range(1, 5)])
+    dn = np.column_stack([store.get("fi_mfrr_da_down_price_rt", o_idx - j, o_ns) for j in range(1, 5)])
+    feats["rt_da_up_prev"] = up[:, 0] - spot[:, 1]
+    feats["rt_da_dn_prev"] = dn[:, 0] - spot[:, 1]
+    feats["rt_da_count1h"] = (np.isfinite(up).sum(axis=1) + np.isfinite(dn).sum(axis=1)).astype(float)
+    per_origin = pd.DataFrame(feats, index=origins)
+    rows = per_origin.reindex(pd.DatetimeIndex(df["forecast_origin_utc"]).as_unit("ns"))
+    for c in per_origin.columns:
+        out[c] = rows[c].to_numpy()
+    out["rt_sa_spread_step1"] = np.where(df["step"].to_numpy() == 1, out["rt_sa_spread_now"], np.nan)
+    return out
+
+
 def add_nwp(df: pd.DataFrame, wind, temp) -> pd.DataFrame:
     """v2 weather features from the newest NWP run usable at each origin (and the run before it)."""
     o = df["forecast_origin_utc"].dt.as_unit("ns").astype("int64").to_numpy()
@@ -542,4 +655,5 @@ def build_table(origins: pd.DatetimeIndex | None = None, with_targets: bool = Tr
                  wind_obs=feature_set in WIND_OBS_SETS,
                  hist=load_hist() if feature_set in HIST_SETS else None, nwp2=nwp2,
                  system=feature_set in SYSTEM_SETS, umm=_umm_for(feature_set),
-                 grid=feature_set in GRID_SETS, persist=feature_set in PERSIST_SETS)
+                 grid=feature_set in GRID_SETS, persist=feature_set in PERSIST_SETS,
+                 rt_mfrr=feature_set in RT_MFRR_SETS, dir_hist=feature_set in DIRHIST_SETS)

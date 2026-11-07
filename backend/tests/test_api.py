@@ -332,7 +332,7 @@ def real_client(real_repo):
 def test_real_periods_use_the_out_of_sample_model_for_validation(real_client):
     validation = real_client.get("/api/forecast", params={"as_of": iso(VALIDATION_FIRST_ORIGIN)}).json()
     test = real_client.get("/api/forecast", params={"as_of": iso(TEST_FIRST_ORIGIN)}).json()
-    assert validation["model"] == "lgbm_v1-val" and test["model"] == "lgbm_v1"
+    assert validation["model"] == "ens_finald-val" and test["model"] == "ens_finald"
 
 
 @needs_real

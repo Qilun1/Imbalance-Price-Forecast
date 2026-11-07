@@ -26,8 +26,8 @@ Environment variables, read at start-up (restart the API after changing one). So
 | Variable | Default | Does |
 |---|---|---|
 | `IMBALANCE_DATA_MODE` | `mock` | `mock`: invented data, needs nothing else. `real`: the store and the forecasts in `backend/infer_data/` |
-| `IMBALANCE_MODEL_VAL` | `lgbm_v1-val` | Model answering for validation dates. Use a `-val` model: the final one is in-sample there |
-| `IMBALANCE_MODEL_TEST` | `lgbm_v1` | Model answering from the test period on, including any later (live) forecasts |
+| `IMBALANCE_MODEL_VAL` | `ens_finald-val` | Model answering for validation dates. Use a `-val` model: the final one is in-sample there |
+| `IMBALANCE_MODEL_TEST` | `ens_finald` | Model answering from the test period on, including any later (live) forecasts. The defaults are the submission; load it with `tools/eval/import_submission.py` (root README). `lgbm_v1` / `lgbm_v1-val` work without the ensemble chain |
 | `IMBALANCE_CHALLENGER_VAL` / `_TEST` | `lgbm_v2-val` / `lgbm_v2` | Second model on different inputs, for the conflicting-signals alert. `none` turns it off |
 | `IMBALANCE_NOTES_VAL` / `_TEST` | `alerts-val` / `alerts` | Event classifiers behind `/api/notes`. `none` turns them off |
 | `IMBALANCE_CORS_ORIGINS` | empty | Browser origins allowed to call the API directly, comma-separated. Empty: no CORS headers |
