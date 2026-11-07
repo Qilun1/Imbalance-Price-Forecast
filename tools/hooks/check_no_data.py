@@ -35,6 +35,10 @@ ALLOWED = [
     # frontend tooling config (not data)
     "frontend/package.json", "frontend/package-lock.json", "frontend/tsconfig*.json",
     "frontend/*.config.json", "frontend/public/manifest.json",
+    # agent skills: third-party config (not data)
+    "skills-lock.json",
+    ".agents/skills/vercel-optimize/references/docs-library.json",
+    ".claude/skills/vercel-optimize/references/docs-library.json",
 ]
 SPOT_MARKERS = (b"fi_spot_price,nordpool", b"spot_nordpool")
 
