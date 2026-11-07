@@ -12,7 +12,10 @@ period; models are the "-val" bundles trained on data published before it.
 """
 from __future__ import annotations
 
+import warnings
+
 import lightgbm as lgb
+warnings.filterwarnings("ignore", message=".*eval_set.*is deprecated")
 import matplotlib
 
 matplotlib.use("Agg")
@@ -160,9 +163,26 @@ def _shap(bundle: Bundle, X: pd.DataFrame, key: str) -> pd.DataFrame:
     return pd.DataFrame(c, columns=bundle.features, index=X.index)
 
 
+def _ensure_val(name: str) -> None:
+    """Train the -val model and infer the validation period if this clone does not have it yet
+    (backend/artifacts is gitignored, so a fresh clone has no models)."""
+    import argparse
+    from imbalance.paths import ARTIFACTS_DIR
+    from tools import cli
+    base = name.removesuffix("-val")
+    fs = "v2" if "v2" in base else "v1"
+    if not (ARTIFACTS_DIR / name / "meta.json").exists():
+        print(f"{name} missing: training it (validation mode)")
+        cli.cmd_train(argparse.Namespace(config=str(CONFIGS_DIR / f"{base}.yaml"), mode="val"))
+    if forecasts.read(name).empty:
+        print(f"{name}: no validation forecasts yet, running inference")
+        cli.cmd_infer(argparse.Namespace(model=name, period="val", set=fs))
+
+
 def shap_plots(models=("lgbm_v1-val", "lgbm_v2-val"), top=15):
     fam_frames = {}
     for name in models:
+        _ensure_val(name)
         b = Bundle.load(name)
         _, val = _split(b.meta.get("feature_set", "v1"))
         X = val.sample(min(len(val), 12000), random_state=0)
@@ -214,6 +234,7 @@ def calibration(models=("lgbm_v1-val", "lgbm_v2-val")):
     act = pd.read_csv(STARTER_DATA_DIR / "actuals_validation.csv")
     fig, axes = plt.subplots(1, 4, figsize=(17, 4.2))
     for name in models:
+        _ensure_val(name)
         fs = "v2" if "v2" in name else "v1"
         fc = forecasts.read(name)
         fc["delivery_start_utc"] = fc["delivery_start_utc"].dt.strftime("%Y-%m-%dT%H:%M:%SZ")
