@@ -5,16 +5,18 @@ import { useEffect, useMemo, useRef } from "react";
 import type { ActualPoint, HindsightPoint } from "@/lib/api/client";
 import { type HindsightRow, HindsightView } from "@/lib/chart/hindsight-view";
 import { upToLastActual } from "@/lib/forecast";
-import { formatClock, formatDate, formatDayRange, formatPrice, formatPriceRange, fromUnixSeconds, toUnixSeconds } from "@/lib/format";
+import { formatDayRange, formatPrice, formatPriceRange, formatShortDateTime, fromUnixSeconds, toUnixSeconds } from "@/lib/format";
 
-type Field = { key: string; label: string; swatch: string; read: (row: HindsightRow) => string };
+import { Readout, ReadoutRow, type ReadoutSpec } from "./chart-readout";
+
+type Field = ReadoutSpec & { read: (row: HindsightRow) => string };
 
 /** The same names, colours and order as the Now chart's readout. */
 const FIELDS: readonly Field[] = [
-  { key: "actual", label: "Actual", swatch: "bg-ink", read: (row) => formatPrice(row.actual) },
-  { key: "spot", label: "Spot", swatch: "bg-chart-spot", read: (row) => formatPrice(row.spot) },
-  { key: "p50", label: "Forecast", swatch: "bg-series-1", read: (row) => formatPrice(row.p50) },
-  { key: "range", label: "Likely range", swatch: "bg-chart-band", read: (row) => formatPriceRange(row.p10, row.p90) },
+  { key: "actual", label: "Actual", swatch: "bg-ink", width: "min-w-12", read: (row) => formatPrice(row.actual) },
+  { key: "spot", label: "Spot", swatch: "bg-chart-spot", width: "min-w-12", read: (row) => formatPrice(row.spot) },
+  { key: "p50", label: "Forecast", swatch: "bg-series-1", width: "min-w-12", read: (row) => formatPrice(row.p50) },
+  { key: "range", label: "Prediction interval", swatch: "bg-chart-band", width: "min-w-28", read: (row) => formatPriceRange(row.p10, row.p90) },
 ];
 
 /** Written straight to the DOM: the crosshair moves too often to re-render React for it. */
@@ -22,7 +24,7 @@ function writeReadout(root: HTMLElement | null, row: HindsightRow | null): void 
   if (!root) return;
   const time = row ? fromUnixSeconds(row.time) : null;
   const at = root.querySelector("[data-field=time]");
-  if (at) at.textContent = time ? `${formatDate(time)} ${formatClock(time)}` : "";
+  if (at) at.textContent = time ? formatShortDateTime(time) : "";
   for (const field of FIELDS) {
     const target = root.querySelector(`[data-field=${field.key}]`);
     if (target) target.textContent = row ? field.read(row) : "–";
@@ -80,16 +82,9 @@ export default function HindsightChart({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
-      <div ref={readout} className="flex h-5 shrink-0 items-baseline gap-x-5 overflow-hidden text-xs whitespace-nowrap">
-        <span data-field="time" className="min-w-30 font-medium text-ink" />
-        {FIELDS.map((field) => (
-          <span key={field.key} className="inline-flex items-baseline gap-1.5">
-            <span className={`size-2 self-center rounded-xs ${field.swatch}`} aria-hidden />
-            <span className="text-muted-foreground">{field.label}</span>
-            <span data-field={field.key} className="text-ink" />
-          </span>
-        ))}
-      </div>
+      <Readout ref={readout}>
+        <ReadoutRow fields={FIELDS} showsTime />
+      </Readout>
       <div
         ref={host}
         role="img"

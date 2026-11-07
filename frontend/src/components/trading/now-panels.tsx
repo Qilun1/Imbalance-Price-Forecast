@@ -38,7 +38,7 @@ export function KpiRow() {
 
   if ((forecast.isError && !forecast.data) || (forecast.data && !top)) return null;
   if (!top) {
-    return <StatStripSkeleton labels={KPI_LABELS} />;
+    return <StatStripSkeleton labels={KPI_LABELS} tallDetail />;
   }
   const change = top.revision?.change ?? 0;
   return (
@@ -46,7 +46,13 @@ export function KpiRow() {
       <Stat
         label={nextHour}
         value={<Euro value={top.nextHour.p50} />}
-        detail={`Likely ${formatEuro(top.nextHour.p10, { digits: 0 })} to ${formatEuro(top.nextHour.p90, { digits: 0 })}`}
+        detail={
+          <>
+            Prediction interval
+            <br />
+            {formatEuro(top.nextHour.p10, { digits: 0 })} to {formatEuro(top.nextHour.p90, { digits: 0 })}
+          </>
+        }
       />
       <Stat label={highest} value={<Euro value={top.highest.price} />} detail={`At ${formatClock(top.highest.at)}`} />
       <Stat label={lowest} value={<Euro value={top.lowest.price} />} detail={`At ${formatClock(top.lowest.at)}`} />
@@ -79,7 +85,6 @@ type Span = (typeof SPANS)[number]["value"];
 export function ForecastPanel() {
   const { asOf, isPast } = useViewingTime();
   const forecast = useQuery(queries.forecast(asOf));
-  const { data: meta } = useQuery(queries.meta());
   const { alerts, selected } = useNow();
   const origin = forecast.data?.origin_utc;
   // All history since the data starts: the same request as the price history table.
@@ -107,7 +112,7 @@ export function ForecastPanel() {
     <Panel label="Imbalance price and forecast" className="h-full">
       <PanelHeader
         title="Imbalance price and forecast"
-        note={`${PRICE_UNIT}, shaded band is the likely range (P10–P90)`}
+        note={`${PRICE_UNIT}, shaded band is the prediction interval (80%)`}
         oneRow
       >
         {isPast ? (
@@ -135,7 +140,6 @@ export function ForecastPanel() {
               forecast={data}
               history={past}
               outcome={showOutcome ? (outcome.data?.points ?? NONE) : NONE}
-              margin={meta?.spike_margin_eur_mwh ?? 50}
               windows={windows}
               spanHours={spanHours}
             />

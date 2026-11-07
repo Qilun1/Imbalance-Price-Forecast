@@ -47,8 +47,11 @@ function StackedLayout() {
   return (
     <div className="flex shrink-0 flex-col gap-3">
       <KpiRow />
-      <SituationsPanel />
-      <div className="h-[44rem]">
+      {/* The wrappers keep each box's own height: directly in this column, its h-full would span the page. */}
+      <div className="shrink-0">
+        <SituationsPanel />
+      </div>
+      <div className="h-[56rem] shrink-0">
         <ForecastPanel />
       </div>
     </div>

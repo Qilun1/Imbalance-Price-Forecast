@@ -153,14 +153,22 @@ export class PaneHeading implements ISeriesPrimitive<Time> {
 export type TimeSpan = { from: UTCTimestamp; to: UTCTimestamp; fill: string };
 export type TimeLine = { time: UTCTimestamp; color: string; label?: string; labelColor?: string };
 
+/**
+ * `overHeading` is for a pane with a PaneHeading: attached after the heading, the marks paint over its
+ * strip and the data. Otherwise they sit under the data.
+ */
 export class TimeMarks implements ISeriesPrimitive<Time> {
   private host: Attached | null = null;
   private spans: TimeSpan[] = [];
   private lines: TimeLine[] = [];
   private readonly views: readonly IPrimitivePaneView[];
 
-  constructor(private readonly labelFont = "") {
-    this.views = [paneView((target) => this.paint(target))];
+  constructor(
+    private readonly labelFont = "",
+    overHeading = false,
+  ) {
+    const renderer: IPrimitivePaneRenderer = { draw: (target) => this.paint(target) };
+    this.views = [overHeading ? { zOrder: () => "top", renderer: () => renderer } : paneView((target) => this.paint(target))];
   }
 
   attached(host: Attached): void {

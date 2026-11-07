@@ -4,7 +4,7 @@
  *
  * - Actual: the realised imbalance price, a dark line with a soft fade under it.
  * - Spot: Nord Pool spot, a violet line.
- * - Forecast: the P50 made `lead` hours ahead, gold, with the P10-P90 likely range as a light band.
+ * - Forecast: the P50 made `lead` hours ahead, gold, with the P10-P90 prediction interval as a light band.
  */
 import {
   AreaSeries,

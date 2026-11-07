@@ -154,7 +154,7 @@ export function HindsightScreen() {
 
   const chart = (
     <Panel label="Forecast against what happened" className="h-full">
-      <PanelHeader title="Forecast vs actual" note={`${PRICE_UNIT}, shaded band is the likely range (P10–P90)`} oneRow>
+      <PanelHeader title="Forecast vs actual" note={`${PRICE_UNIT}, shaded band is the prediction interval (80%)`} oneRow>
         <Choice
           label="How far ahead the forecast was made"
           value={lead}

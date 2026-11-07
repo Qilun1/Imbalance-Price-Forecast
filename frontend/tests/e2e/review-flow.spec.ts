@@ -187,6 +187,19 @@ test("losing and regaining the API is announced", async ({ page }) => {
   await expect(page.getByText("Connection restored")).toBeVisible();
 });
 
+test("the arrow keys read the chart one quarter-hour at a time", async ({ page }) => {
+  await page.goto(`/?as_of=${SPIKE}`);
+  const time = page.locator("[data-field=time]");
+  await expect(time).toHaveText("23 Oct 09:00");
+  await page.getByRole("img", { name: /Forecast chart/ }).focus();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await expect(time).toHaveText("23 Oct 09:15");
+  await expect(page.locator("[data-field=up]")).not.toHaveText("–");
+  await page.keyboard.press("Escape");
+  await expect(time).toHaveText("23 Oct 09:00");
+});
+
 test("a viewing time outside the data offers a way back", async ({ page }) => {
   await page.goto("/?as_of=2020-01-01T00:00:00Z");
   await expect(page.getByRole("button", { name: "Back to latest" }).first()).toBeVisible();

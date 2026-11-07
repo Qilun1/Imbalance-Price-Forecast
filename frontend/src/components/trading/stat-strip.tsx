@@ -51,14 +51,17 @@ export function StatStrip({ label, heading, children }: { label: string; heading
   );
 }
 
-/** The strip's loading state, keeping each label and the heading so the layout does not jump. */
-export function StatStripSkeleton({ labels, heading }: { labels: readonly string[]; heading?: string }) {
+/**
+ * The strip's loading state, keeping each label and the heading so the layout does not jump. `tallDetail`
+ * is for a strip with a two-line detail.
+ */
+export function StatStripSkeleton({ labels, heading, tallDetail = false }: { labels: readonly string[]; heading?: string; tallDetail?: boolean }) {
   return (
     <div className={STRIP} aria-hidden>
       {heading ? <p className={HEADING}>{heading}</p> : null}
       <div className={GRID}>
         {labels.map((label) => (
-          <Stat key={label} label={label} value={<Skeleton className="my-1 h-5 w-20" />} detail={<Skeleton className="h-3 w-24" />} />
+          <Stat key={label} label={label} value={<Skeleton className="my-1 h-5 w-20" />} detail={<Skeleton className={tallDetail ? "h-8 w-24" : "h-3 w-24"} />} />
         ))}
       </div>
     </div>

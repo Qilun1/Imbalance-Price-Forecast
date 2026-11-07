@@ -157,6 +157,11 @@ export function formatWeekday(iso: string): string {
   return format(inUtc(iso), "EEE");
 }
 
+/** For tight spaces such as a chart readout. */
+export function formatShortDateTime(iso: string): string {
+  return format(inUtc(iso), "d MMM HH:mm");
+}
+
 export function formatDateTime(iso: string): string {
   return format(inUtc(iso), "EEE d MMM HH:mm");
 }

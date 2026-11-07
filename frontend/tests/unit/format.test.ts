@@ -9,6 +9,7 @@ import {
   formatDate,
   formatDateTime,
   formatDateTimeUtc,
+  formatShortDateTime,
   formatMegawatts,
   formatMinutes,
   formatPercent,
@@ -154,6 +155,7 @@ describe("time on screen", () => {
   it("names the UTC day, even when Helsinki is already on the next one", () => {
     expect(formatDate("2026-10-22T22:00:00Z")).toBe("Thu 22 Oct");
     expect(formatDateTime("2026-10-22T22:00:00Z")).toBe("Thu 22 Oct 22:00");
+    expect(formatShortDateTime("2026-10-22T22:00:00Z")).toBe("22 Oct 22:00");
     expect(utcHour("2026-10-22T22:00:00Z")).toBe(22);
     expect(toCalendarDate("2026-10-22T22:00:00Z").getDate()).toBe(22);
   });
