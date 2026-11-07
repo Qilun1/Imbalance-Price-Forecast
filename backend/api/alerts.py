@@ -23,7 +23,7 @@ from backend.api.labels import label_for
 from backend.api.schemas import Alert, Driver
 
 STEP = pd.Timedelta(minutes=15)
-DISPLAY_TZ = "Europe/Helsinki"
+DISPLAY_TZ = "UTC"
 NORMAL_DATA_AGE_MINUTES = 75
 _RISK_KINDS = ("spike_risk", "forecast_changed", "high_uncertainty", "regulation_expected")
 _KIND_WORDS = {"spike_risk": "exceptional price risk", "forecast_changed": "a forecast revision",
@@ -65,7 +65,7 @@ def _clock(ts: pd.Timestamp) -> str:
 
 
 def _span(rows: pd.DataFrame) -> str:
-    return f"{_clock(rows['delivery_start_utc'].iloc[0])}–{_clock(rows['delivery_start_utc'].iloc[-1] + STEP)}"
+    return f"{_clock(rows['delivery_start_utc'].iloc[0])}–{_clock(rows['delivery_start_utc'].iloc[-1] + STEP)} UTC"
 
 
 def _drivers(rows: pd.DataFrame, n: int = 3) -> list[Driver]:

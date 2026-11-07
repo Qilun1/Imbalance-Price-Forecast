@@ -141,10 +141,11 @@ def test_alerts_suggest_a_check_and_name_drivers(client):
     assert alert["window_start_utc"] == "2026-10-23T13:00:00Z" and alert["window_end_utc"] == "2026-10-23T15:00:00Z"
 
 
-def test_alert_times_read_in_helsinki_across_the_clock_change(client):
+def test_alert_times_read_in_utc_and_say_so(client):
     body = client.get("/api/alerts", params={"as_of": iso(SCENARIO["large_revision"].as_of)}).json()
     alert = next(a for a in body["alerts"] if a["kind"] == "forecast_changed")
-    assert "09:00–12:00" in alert["message"]                    # 07:00-10:00 UTC, after the clocks went back
+    assert "07:00–10:00 UTC" in alert["message"]
+    assert alert["window_start_utc"] == "2026-10-25T07:00:00Z" and alert["window_end_utc"] == "2026-10-25T10:00:00Z"
 
 
 def test_performance_never_looks_past_the_viewing_time(client):
