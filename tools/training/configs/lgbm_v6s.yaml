@@ -1,0 +1,15 @@
+# lgbm_v6s: lgbm_v4s + second NWP model wind and forecast disagreement (features.add_nwp_spread)
+# v2: v1 + vintaged NWP weather proxies (ECMWF IFS 9 km via Open-Meteo Single Runs).
+name: lgbm_v6s
+feature_set: v6
+widen: 1.6            # same as v1 until re-tuned on validation
+regressor:
+  n_estimators: 150
+  learning_rate: 0.03
+  num_leaves: 31
+  min_child_samples: 200
+classifier:
+  n_estimators: 110
+  learning_rate: 0.03
+  num_leaves: 31
+  min_child_samples: 200
