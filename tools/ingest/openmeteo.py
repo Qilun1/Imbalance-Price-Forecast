@@ -29,7 +29,10 @@ URL = "https://single-runs-api.open-meteo.com/v1/forecast"
 MODELS = {
     # model id: (publication delay, run hours UTC)
     "ecmwf_ifs": (pd.Timedelta(hours=8), (0, 6, 12, 18)),
-    "metno_nordic": (None, (0, 6, 12, 18)),   # delay NOT measured yet: ingest refuses until it is set
+    # metno_nordic (MET Nordic, MEPS 2.5 km post-processed, hourly runs): measured 7 Nov 2026 via meta.json
+    # availability - init = 34 min 27 s; + 10 min Open-Meteo advice = 45 min; next full hour = 1 h; + 1 h
+    # margin -> 2 h. We take the 00/06/12/18 runs only (API budget).
+    "metno_nordic": (pd.Timedelta(hours=2), (0, 6, 12, 18)),
 }
 META_URL = "https://api.open-meteo.com/data/{model}/static/meta.json"
 
