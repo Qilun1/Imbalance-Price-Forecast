@@ -74,6 +74,16 @@ LABELS: dict[str, str] = {
     "nwp_run_age_h": "Age of the latest weather forecast",
     "nwp_temp_c": "Temperature forecast, population-weighted",
     "nwp_temp_change_vs_origin": "Temperature change from now",
+    "wind_err_last": "Latest wind error vs Fingrid forecast",
+    "wind_err_mean4": "Wind error vs Fingrid forecast, last hour",
+    "wind_err_trend_1h": "Wind error change over the last hour",
+    "wind_act_last": "Latest measured wind power",
+    "wind_obs_lead_h": "Hours from the latest wind measurement",
+    "wind_err_decay_1h": "Wind error carried forward (fast fade)",
+    "wind_err_decay_3h": "Wind error carried forward (3 h fade)",
+    "wind_err_decay_6h": "Wind error carried forward (slow fade)",
+    "wind_fc_corrected": "Wind forecast corrected by the latest error",
+    "resid_load_corrected": "Residual load corrected by the latest wind error",
 }
 
 
