@@ -13,7 +13,7 @@ from imbalance import store
 from imbalance.features import Store, build, feature_columns
 
 from tools.training.feature_table import load_feature_table
-from imbalance.features import WIND_OBS_SETS
+from imbalance.features import HIST_SETS, WIND_OBS_SETS, load_hist
 
 
 def check(feature_set: str = "v1", n: int = 60, seed: int = 0, origins: pd.DatetimeIndex | None = None) -> bool:
@@ -31,7 +31,8 @@ def check(feature_set: str = "v1", n: int = 60, seed: int = 0, origins: pd.Datet
             from imbalance import nwp
             nwp_tables = nwp.load_for(feature_set, visible_before=o)          # runs not yet usable are physically removed
         ref = build(Store(visible), pd.DatetimeIndex([o]), with_targets=False, nwp=nwp_tables,
-                    wind_obs=feature_set in WIND_OBS_SETS)
+                    wind_obs=feature_set in WIND_OBS_SETS,
+                    hist=load_hist() if feature_set in HIST_SETS else None)   # its own check: hist_heads --check
         used = table[table["forecast_origin_utc"] == o].sort_values("step")
         same = np.isclose(ref[cols].to_numpy(float), used[cols].to_numpy(float), equal_nan=True, rtol=0, atol=1e-9)
         if not same.all():

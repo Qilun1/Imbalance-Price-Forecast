@@ -84,6 +84,7 @@ LABELS: dict[str, str] = {
     "wind_err_decay_6h": "Wind error carried forward (slow fade)",
     "wind_fc_corrected": "Wind forecast corrected by the latest error",
     "resid_load_corrected": "Residual load corrected by the latest wind error",
+    "hist_p_up": "Up-regulation chance from 1.5 years of history",
 }
 
 

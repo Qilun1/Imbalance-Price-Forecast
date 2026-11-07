@@ -16,8 +16,9 @@ from . import store as db
 from .contract import HORIZON_STEPS as HORIZON, SPIKE_MARGIN, STEP  # noqa: F401
 
 FEATURE_SET = "v1"                 # default feature set
-FEATURE_SETS = ("v1", "v2", "v2p", "v3", "v4", "v4m")   # v2+ = v1 + vintaged NWP proxies; model per set in nwp.NWP_SPECS
-WIND_OBS_SETS = {"v4", "v4m"}     # + observed wind error vs Fingrid day-ahead forecast (Fingrid 75 vs 246)
+FEATURE_SETS = ("v1", "v2", "v2p", "v3", "v4", "v4m", "v5", "v5m")   # v2+ = v1 + vintaged NWP proxies; model per set in nwp.NWP_SPECS
+WIND_OBS_SETS = {"v4", "v4m", "v5", "v5m"}     # + observed wind error vs Fingrid day-ahead forecast (Fingrid 75 vs 246)
+HIST_SETS = {"v5", "v5m"}         # + out-of-sample long-history direction head (tools/training/hist_heads.py)
 WIND_ERR_TAUS_H = (1, 3, 6)       # decay time constants (h) of the observed error with lead time
 
 LAG_SERIES = [
@@ -85,7 +86,7 @@ def lag_window(store: Store, sid: str, last: np.ndarray, o: np.ndarray, k: int) 
 
 
 def build(store: Store, origins: pd.DatetimeIndex, with_targets: bool, nwp: tuple | None = None,
-          wind_obs: bool = False) -> pd.DataFrame:
+          wind_obs: bool = False, hist: pd.DataFrame | None = None) -> pd.DataFrame:
     """Feature rows for (origin, step). nwp = (wind RunTable, temp RunTable) adds the v2 weather columns;
     wind_obs adds the observed wind-error columns (v4)."""
     import warnings
@@ -96,7 +97,29 @@ def build(store: Store, origins: pd.DatetimeIndex, with_targets: bool, nwp: tupl
             df = add_nwp(df, *nwp)
         if wind_obs:
             df = add_wind_obs(df, store)
+        if hist is not None:
+            df = add_hist(df, hist)
         return df
+
+
+def load_hist() -> pd.DataFrame:
+    """Precomputed out-of-sample P(up) of the long-history head (see tools/training/hist_heads.py)."""
+    from .paths import PROCESSED_DIR
+    p = PROCESSED_DIR / "hist_heads.parquet"
+    if not p.exists():
+        raise RuntimeError("hist_heads.parquet missing: run `uv run python -m tools.training.hist_heads`")
+    return pd.read_parquet(p)
+
+
+def add_hist(df: pd.DataFrame, hist: pd.DataFrame) -> pd.DataFrame:
+    """v5: merge the long-history head's P(up) by (origin, step); origins it does not cover stay NaN."""
+    h = hist.assign(forecast_origin_utc=pd.to_datetime(hist["forecast_origin_utc"], utc=True))
+    key = df[["forecast_origin_utc", "step"]].assign(
+        forecast_origin_utc=pd.to_datetime(df["forecast_origin_utc"], utc=True))
+    m = key.merge(h[["forecast_origin_utc", "step", "hist_p_up"]], on=["forecast_origin_utc", "step"], how="left")
+    out = df.copy()
+    out["hist_p_up"] = m["hist_p_up"].to_numpy()
+    return out
 
 
 def add_wind_obs(df: pd.DataFrame, store: Store) -> pd.DataFrame:
@@ -314,4 +337,5 @@ def build_table(origins: pd.DatetimeIndex | None = None, with_targets: bool = Tr
         last = (st.grid[-1] - pd.Timedelta(hours=9, minutes=45)).floor("h")
         origins = pd.date_range(first, last, freq="h")
     return build(st, pd.DatetimeIndex(origins), with_targets=with_targets, nwp=nwp_tables,
-                 wind_obs=feature_set in WIND_OBS_SETS)
+                 wind_obs=feature_set in WIND_OBS_SETS,
+                 hist=load_hist() if feature_set in HIST_SETS else None)
