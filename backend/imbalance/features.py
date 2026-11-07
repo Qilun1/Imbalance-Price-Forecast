@@ -16,8 +16,9 @@ from . import store as db
 from .contract import HORIZON_STEPS as HORIZON, SPIKE_MARGIN, STEP  # noqa: F401
 
 FEATURE_SET = "v1"                 # default feature set
-FEATURE_SETS = ("v1", "v2", "v2p", "v3", "v4", "v4m", "v5", "v5m", "v6", "v6m", "v7", "v7m")   # v2+ = v1 + vintaged NWP proxies; model per set in nwp.NWP_SPECS
-WIND_OBS_SETS = {"v4", "v4m", "v5", "v5m", "v6", "v6m", "v7", "v7m"}
+FEATURE_SETS = ("v1", "v2", "v2p", "v3", "v4", "v4m", "v5", "v5m", "v6", "v6m", "v7", "v7m", "v8", "v8m")   # v2+ = v1 + vintaged NWP proxies; model per set in nwp.NWP_SPECS
+WIND_OBS_SETS = {"v4", "v4m", "v5", "v5m", "v6", "v6m", "v7", "v7m", "v8", "v8m"}
+UMM_SETS = {"v8", "v8m"}          # + Nord Pool UMM outage messages, each version from its publication time
 SYSTEM_SETS = {"v7", "v7m"}       # + system stress: nuclear / hydro (Fingrid 188 / 191) and import-link saturation     # + observed wind error vs Fingrid day-ahead forecast (Fingrid 75 vs 246)
 HIST_SETS = {"v5", "v5m"}         # + out-of-sample long-history direction head (tools/training/hist_heads.py)
 WIND_ERR_TAUS_H = (1, 3, 6)       # decay time constants (h) of the observed error with lead time
@@ -88,7 +89,7 @@ def lag_window(store: Store, sid: str, last: np.ndarray, o: np.ndarray, k: int) 
 
 def build(store: Store, origins: pd.DatetimeIndex, with_targets: bool, nwp: tuple | None = None,
           wind_obs: bool = False, hist: pd.DataFrame | None = None, nwp2=None,
-          system: bool = False) -> pd.DataFrame:
+          system: bool = False, umm: pd.DataFrame | None = None) -> pd.DataFrame:
     """Feature rows for (origin, step). nwp = (wind RunTable, temp RunTable) adds the v2 weather columns;
     wind_obs adds the observed wind-error columns (v4)."""
     import warnings
@@ -105,6 +106,9 @@ def build(store: Store, origins: pd.DatetimeIndex, with_targets: bool, nwp: tupl
             df = add_hist(df, hist)
         if system:
             df = add_system_state(df, store)
+        if umm is not None:
+            from .umm import add_umm
+            df = add_umm(df, umm)
         return df
 
 
@@ -164,6 +168,13 @@ def add_wind_obs(df: pd.DataFrame, store: Store) -> pd.DataFrame:
                      pd.Series(wind_cut, index=origins).reindex(o_key).to_numpy())
     out["data_cutoff_utc"] = pd.to_datetime(np.minimum(cut, o_key.asi8), utc=True)
     return out
+
+
+def _umm_for(feature_set: str, visible_before=None):
+    if feature_set not in UMM_SETS:
+        return None
+    from .umm import load_periods
+    return load_periods(visible_before=visible_before)
 
 
 FLOW_LINKS = ("fi_se1_flow", "fi_se3_flow", "fi_ee_flow")   # positive = export from Finland
@@ -422,4 +433,4 @@ def build_table(origins: pd.DatetimeIndex | None = None, with_targets: bool = Tr
     return build(st, pd.DatetimeIndex(origins), with_targets=with_targets, nwp=nwp_tables,
                  wind_obs=feature_set in WIND_OBS_SETS,
                  hist=load_hist() if feature_set in HIST_SETS else None, nwp2=nwp2,
-                 system=feature_set in SYSTEM_SETS)
+                 system=feature_set in SYSTEM_SETS, umm=_umm_for(feature_set))

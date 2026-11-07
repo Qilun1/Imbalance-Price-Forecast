@@ -110,6 +110,12 @@ LABELS: dict[str, str] = {
     "hist_up_px_q90": "Long-history high up-regulation price (90 %)",
     "hist_up_spread_q50": "Long-history typical up-regulation premium over spot",
     "hist_up_spread_q90": "Long-history high up-regulation premium over spot (90 %)",
+    "umm_unplanned_gen_mw": "Unplanned generation outages announced (UMM)",
+    "umm_planned_gen_mw": "Planned generation outages announced (UMM)",
+    "umm_nuclear_mw": "Nuclear capacity out, announced (UMM)",
+    "umm_import_loss_mw": "Import capacity out, announced (UMM)",
+    "umm_new_unplanned_mw": "Outage announced in the last 3 hours (UMM)",
+    "umm_hours_since_trip": "Hours since the last unplanned outage message (UMM)",
     "hist_p_up": "Up-regulation chance from 1.5 years of history",
 }
 
