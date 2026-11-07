@@ -12,20 +12,22 @@ import {
   formatPrice,
   formatPriceRange,
   formatWindow,
+  NO_VALUE,
   PRICE_UNIT,
 } from "@/lib/format";
 
 type Field = { key: string; label: string; swatch?: string; read: (row: ChartRow) => string };
 
 const FIELDS: readonly Field[] = [
-  { key: "p50", label: "P50", swatch: "bg-series-1", read: (row) => formatPrice(row.p50) },
-  { key: "range", label: "P10–P90", swatch: "bg-chart-band", read: (row) => formatPriceRange(row.p10, row.p90) },
-  { key: "spot", label: "Spot", swatch: "bg-stone", read: (row) => formatPrice(row.spot) },
   { key: "actual", label: "Actual", swatch: "bg-ink", read: (row) => formatPrice(row.actual ?? row.outcome) },
-  { key: "high", label: "High risk", swatch: "bg-up", read: (row) => formatPercent(row.high) },
-  { key: "low", label: "Low risk", swatch: "bg-down", read: (row) => formatPercent(row.low) },
-  { key: "up", label: "Up", swatch: "bg-up", read: (row) => formatPercent(row.pUp) },
-  { key: "down", label: "Down", swatch: "bg-down", read: (row) => formatPercent(row.pDown) },
+  { key: "spot", label: "Spot", swatch: "bg-chart-spot", read: (row) => formatPrice(row.spot) },
+  { key: "p50", label: "Forecast", swatch: "bg-series-1", read: (row) => formatPrice(row.p50) },
+  {
+    key: "range",
+    label: "Likely range",
+    swatch: "bg-chart-band",
+    read: (row) => (row.p10 === null || row.p90 === null ? NO_VALUE : formatPriceRange(row.p10, row.p90)),
+  },
 ];
 
 /** Written straight to the DOM: the crosshair moves too often to re-render React for it. */
@@ -50,6 +52,7 @@ function describe(forecast: Forecast): string {
     `Forecast chart for ${formatWindow(first.delivery_start_utc, last.delivery_start_utc)}, made ${formatDateTime(forecast.origin_utc)}. ` +
     `P50 runs from ${formatPrice(Math.min(...prices))} to ${formatPrice(Math.max(...prices))} ${PRICE_UNIT}. ` +
     `Highest risk of an exceptionally high price is ${formatPercent(highest.p_spike_high)} at ${formatDateTime(highest.delivery_start_utc)}. ` +
+    "The Nord Pool spot price is the purple line. " +
     "Use the left and right arrow keys to read each quarter-hour. The Next 10 h table holds the same values."
   );
 }
@@ -60,12 +63,15 @@ export default function ForecastChart({
   outcome,
   margin,
   windows,
+  spanHours,
 }: {
   forecast: Forecast;
   history: readonly ActualPoint[];
   outcome: readonly ActualPoint[];
   margin: number;
   windows: readonly ChartWindow[];
+  /** Hours of history in view when the chart opens; null for all of it. */
+  spanHours: number | null;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const readout = useRef<HTMLDivElement>(null);
@@ -73,6 +79,7 @@ export default function ForecastChart({
   const resting = useRef<ChartRow | null>(null);
 
   const rows = useMemo(() => buildRows(forecast, history, outcome), [forecast, history, outcome]);
+  const showsOutcome = outcome.length > 0;
 
   useEffect(() => {
     if (!host.current) return;
@@ -86,13 +93,13 @@ export default function ForecastChart({
 
   useEffect(() => {
     resting.current = rows.find((row) => row.p50 !== null) ?? null;
-    view.current?.update({ rows, origin: forecast.origin_utc, margin, windows });
+    view.current?.update({ rows, origin: forecast.origin_utc, margin, windows, spanHours });
     writeReadout(readout.current, resting.current);
-  }, [rows, forecast.origin_utc, margin, windows]);
+  }, [rows, forecast.origin_utc, margin, windows, spanHours]);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
-      <div ref={readout} className="flex h-9 shrink-0 flex-wrap content-start items-baseline gap-x-4 gap-y-0.5 text-xs">
+      <div ref={readout} className="flex h-5 shrink-0 items-baseline gap-x-5 overflow-hidden text-xs whitespace-nowrap">
         <span data-field="time" className="min-w-30 font-medium text-ink" />
         {FIELDS.map((field) => (
           <span key={field.key} className="inline-flex items-baseline gap-1.5">
@@ -101,6 +108,15 @@ export default function ForecastChart({
             <span data-field={field.key} className="text-ink" />
           </span>
         ))}
+        {/* Here rather than in the panel header, so turning the switch on never moves the header row. */}
+        {showsOutcome ? (
+          <span
+            className="ml-auto min-w-0 truncate text-muted-foreground"
+            title="The black line after “Forecast” is what really happened. It was not known when the forecast was made."
+          >
+            Black line: what happened
+          </span>
+        ) : null}
       </div>
       <div
         ref={host}

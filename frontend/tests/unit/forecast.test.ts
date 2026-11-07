@@ -64,14 +64,14 @@ describe("windows", () => {
 });
 
 describe("headline", () => {
-  it("averages the next hour and finds the peaks in the whole horizon", () => {
+  it("averages the next hour and finds the highest and lowest price in the whole horizon", () => {
     const steps = [0, 1, 2, 3, 4, 5].map((i) => step(i, { p50: 40 + i * 10 }));
-    steps[5] = step(5, { p_spike_high: 0.4 });
-    steps[2] = step(2, { p50: 60, p_spike_low: 0.2 });
+    steps[5] = step(5, { p50: 15 });
+    steps[4] = step(4, { p50: 120 });
     const result = headline(forecast(steps), NO_CHANGES);
     expect(result?.nextHour.p50).toBe((40 + 50 + 60 + 70) / 4);
-    expect(result?.highRisk).toEqual({ probability: 0.4, at: steps[5]?.delivery_start_utc });
-    expect(result?.lowRisk.at).toBe(steps[2]?.delivery_start_utc);
+    expect(result?.highest).toEqual({ price: 120, at: steps[4]?.delivery_start_utc });
+    expect(result?.lowest).toEqual({ price: 15, at: steps[5]?.delivery_start_utc });
     expect(result?.revision).toBeNull();
     expect(result?.nextHour.change).toBeNull();
   });

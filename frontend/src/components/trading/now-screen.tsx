@@ -14,26 +14,41 @@ import { SituationsPanel } from "./situations";
 const GAP_HANDLE = "w-3 bg-transparent aria-[orientation=horizontal]:h-3 aria-[orientation=horizontal]:w-full";
 
 function WideLayout() {
-  // A new storage id, so sizes saved while the situations were on the left do not apply.
-  const across = useDefaultLayout({ id: "now-across-chart-left", panelIds: ["evidence", "situations"], storage: safeStorage });
+  // A new storage id whenever the default split changes, so sizes saved for an older layout do not apply.
+  const across = useDefaultLayout({ id: "now-across-v3", panelIds: ["evidence", "situations"], storage: safeStorage });
   return (
-    <ResizablePanelGroup orientation="horizontal" className="min-h-96 flex-1" defaultLayout={across.defaultLayout} onLayoutChanged={across.onLayoutChanged}>
-      <ResizablePanel id="evidence" defaultSize="72">
-        <ForecastPanel />
-      </ResizablePanel>
-      <ResizableHandle className={GAP_HANDLE} aria-label="Resize the situations panel" />
-      <ResizablePanel id="situations" defaultSize="28" minSize="22" maxSize="42">
-        <SituationsPanel />
-      </ResizablePanel>
-    </ResizablePanelGroup>
+    // The height sits on a wrapper: the panel group sets its own height inline.
+    <div className="min-h-[36rem] flex-1">
+      <ResizablePanelGroup
+        orientation="horizontal"
+        className="h-full"
+        defaultLayout={across.defaultLayout}
+        onLayoutChanged={across.onLayoutChanged}
+      >
+        <ResizablePanel id="evidence" defaultSize="66">
+          {/* The key figures sit above the chart, so their edges match it and the situations run full height. */}
+          <div className="flex h-full min-h-0 flex-col gap-3">
+            <KpiRow />
+            <div className="min-h-0 flex-1">
+              <ForecastPanel />
+            </div>
+          </div>
+        </ResizablePanel>
+        <ResizableHandle className={GAP_HANDLE} aria-label="Resize the situations panel" />
+        <ResizablePanel id="situations" defaultSize="34" minSize="26" maxSize="45">
+          <SituationsPanel />
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    </div>
   );
 }
 
 function StackedLayout() {
   return (
     <div className="flex shrink-0 flex-col gap-3">
+      <KpiRow />
       <SituationsPanel />
-      <div className="h-[32rem]">
+      <div className="h-[44rem]">
         <ForecastPanel />
       </div>
     </div>
@@ -44,7 +59,6 @@ export function NowScreen() {
   const wide = useIsWide();
   return (
     <NowProvider>
-      <KpiRow />
       {wide === null ? <Skeleton className="min-h-0 flex-1" /> : wide ? <WideLayout /> : <StackedLayout />}
       <SituationSheet />
     </NowProvider>
