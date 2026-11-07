@@ -1,6 +1,8 @@
 # Plan: learned event notes for traders and plant operators
 
-Status: draft, 7 Nov 2026. Branch `atte/alerts-classifier`.
+Status: steps 1–4 done (7 Nov 2026): labels, out-of-sample inputs with a leakage check, trained
+classifiers (`alerts-val`, `alerts`), inference into `event_probs` and `GET /api/notes`. Step 5
+(frontend views) is next. Run it with `uv run python -m tools.cli alerts all`.
 
 ## Goal
 
@@ -46,18 +48,8 @@ Labels come from realised organiser series only, through `Store.truth` (targets 
 | `forecast_miss` | ≥ 2 quarters with \|imbalance − p50\| > 100 (the base forecast will be badly wrong) | ✓ | |
 
 The definitions live in `backend/imbalance/events.py`. Their rates per (origin, window) on training
-data before validation (`tools/training/event_rates.py`):
-
-| Event | now | soon | later |
-|---|---|---|---|
-| spike_high | 13.5 % | 17.4 % | 24.0 % |
-| spike_low | 10.5 % | 13.9 % | 19.1 % |
-| up_episode | 30.0 % | 39.5 % | 53.2 % |
-| direction_flip | 29.1 % | 42.6 % | 59.9 % |
-| extreme_price | 6.3 % | 7.8 % | 10.4 % |
-| deep_negative | 2.6 % | 3.6 % | 5.7 % |
-| large_up_activation | 9.2 % | 12.7 % | 19.2 % |
-| large_down_activation | 8.5 % | 11.4 % | 16.7 % |
+data before validation are printed by `tools/training/event_rates.py` (not committed: spike rates
+are derived from the licensed spot price, AGENTS.md rules 0 and 6).
 
 **Operator = a CHP plant with electric boilers** (team decision, 7 Nov 2026). Both assets can move
 power in either direction, so the operator's notes point to what to check:
@@ -186,6 +178,22 @@ decided in step 1.
 4. The final `alerts` variant, inference into `event_probs`, the `/notes` API with mock data, and
    tests.
 5. Frontend trader and operator views.
+
+## 6b. Outcome of the model comparison (step 3)
+
+Validation diagnostics are written to `static_data/work/alerts/eval_validation.csv` (gitignored; scores
+are data, AGENTS.md rule 0). In short:
+- The MLP was the weakest or near-weakest family on every event, as the tabular-data literature predicts.
+  It is not used.
+- LightGBM clearly beat the calibrated rule baseline for `spike_high`, `direction_flip` and
+  `deep_negative`. For the other events the rule on the base forecast's own probabilities was as
+  good or better, so the rule is used there (`tools/training/configs/alerts.yaml`).
+- `large_up_activation` and `deep_negative` have little validation skill and are hidden from `/notes`
+  by default (`include_low_skill=true` shows them, flagged).
+- Venn–Abers intervals are narrow for most rows (around 5,000 calibration rows), and wide in sparse
+  score regions. The confidence-tier bars were read from validation origins only.
+- TabPFN was not tried: TabPFN-2.5+ weights are non-commercial. The TabPFN-2 weights (Apache 2.0 with
+  attribution) remain an option, but need PyTorch.
 
 ## 7. Open questions for the team
 

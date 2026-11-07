@@ -37,8 +37,7 @@ class Event:
     id: str
     title: str
     definition: str
-    personas: tuple[str, ...]
-    default_threshold: float = 0.5      # probability at which a note fires; tuned on validation later
+    personas: tuple[str, ...]           # default thresholds live in the trained bundle (alert_model.py)
 
 
 EVENTS: tuple[Event, ...] = (
@@ -71,7 +70,30 @@ EVENTS: tuple[Event, ...] = (
           "from the P50 forecast", ("trader",)),
 )
 EVENT_IDS = tuple(e.id for e in EVENTS)
+EVENT_BY_ID = {e.id: e for e in EVENTS}
 PERSONAS = ("trader", "operator")
+
+# What each persona could check. Notes say what to check, never what to do: open data cannot tell what
+# capacity is free or what it costs (challenge brief, first phase). The operator runs a CHP plant with
+# electric boilers (team decision, 7 Nov 2026).
+_CHP_UP = "headroom to raise CHP electricity output or to turn the electric boilers down, and the heat storage level"
+_CHP_DOWN = "whether the electric boilers can take load and the CHP can turn down, and room in heat storage"
+CHECKS: dict[tuple[str, str], str] = {
+    ("trader", "spike_high"): "the open imbalance position for this window: a short position would settle far above spot",
+    ("trader", "spike_low"): "the open imbalance position for this window: a long position would settle far below spot",
+    ("trader", "up_episode"): "the imbalance position and intraday prices while the system is short",
+    ("trader", "direction_flip"): "positions that assume the current regulation direction continues",
+    ("trader", "extreme_price"): "any short imbalance position for this window",
+    ("trader", "forecast_miss"): "the market by hand before relying on the price forecast for this window",
+    ("operator", "spike_high"): _CHP_UP,
+    ("operator", "extreme_price"): _CHP_UP,
+    ("operator", "up_episode"): "flexible capacity for mFRR up: CHP headroom or electric boiler load that could be shed",
+    ("operator", "large_up_activation"): "flexible capacity for mFRR up: CHP headroom or electric boiler load that could be shed",
+    ("operator", "spike_low"): _CHP_DOWN,
+    ("operator", "deep_negative"): _CHP_DOWN,
+    ("operator", "large_down_activation"): "flexible capacity for mFRR down: electric boiler load that could be added or CHP turn-down",
+}
+assert all((p, e.id) in CHECKS for e in EVENTS for p in e.personas), "every persona event needs a check"
 
 
 def max_run(mask: np.ndarray) -> np.ndarray:

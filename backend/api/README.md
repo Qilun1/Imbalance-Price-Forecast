@@ -19,6 +19,7 @@ Interactive docs: <http://127.0.0.1:8000/docs>. Real mode needs the steps in `to
 | `GET /api/actuals?from=&to=&as_of=` | Realised price and direction usable at `as_of` |
 | `GET /api/alerts?as_of=` | The situations worth checking, with reasons |
 | `GET /api/performance?from=&to=&as_of=` | Official validation scores plus a chosen window |
+| `GET /api/notes?persona=trader\|operator&as_of=&thresholds=&include_low_skill=` | Learned event probabilities for the next 0–2, 2–5 and 5–10 h, with interval, lift vs normal, confidence, drivers and what to check |
 
 Timestamps are UTC and must carry a time zone, for example `2026-10-20T08:00:00Z`. `as_of` is the
 viewing time; if it is left out, the API uses the newest forecast.
@@ -38,6 +39,13 @@ viewing time; if it is left out, the API uses the newest forecast.
 - **Conflicting signals:** independent sources must disagree, not two outputs of one model. The main
   forecast is compared with a second model on different input data from the same origin
   (`lgbm_v2`, which adds ECMWF weather; `IMBALANCE_CHALLENGER_VAL` / `_TEST`, `none` turns it off).
+
+- **Notes:** `/notes` serves the event classifiers (docs/plans/event_notes.md): `alerts-val` for
+  validation dates (out of sample) and `alerts` for test dates (`IMBALANCE_NOTES_VAL` / `_TEST`,
+  `none` turns them off). The operator view is a CHP plant with electric boilers. A note fires at the
+  bundle's default threshold or at a user-set one (`thresholds=spike_high:0.3,...`); a threshold
+  changes only `fires`, never the probabilities. Events with validation Brier skill below the
+  bundle's bar are hidden unless `include_low_skill=true`. Notes say what to check, never what to do.
 
 Mock data lives in `backend/infer_data/mock_forecasts.duckdb` (gitignored). `mock.py` is invented from
 a seed, reads none of the organiser's files, and scripts one of each situation; see `SCENARIOS` there.

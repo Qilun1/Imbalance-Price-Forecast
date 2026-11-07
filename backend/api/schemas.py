@@ -93,6 +93,40 @@ class Alerts(BaseModel):
     alerts: list[Alert]
 
 
+Persona = Literal["trader", "operator"]
+NoteWindow = Literal["now", "soon", "later"]
+
+
+class Note(BaseModel):
+    """One event's probability in one window, from the event classifiers (docs/plans/event_notes.md)."""
+    event: str
+    title: str
+    definition: str
+    window: NoteWindow
+    window_label: str
+    window_start_utc: datetime
+    window_end_utc: datetime
+    probability: float
+    probability_low: float          # Venn-Abers interval: wide when training had few similar cases
+    probability_high: float
+    base_rate: float                # how often the event happened in this window in training
+    lift: float                     # probability / base_rate
+    threshold: float                # default or user-set; changing it changes only `fires`
+    fires: bool
+    confidence: Literal["high", "medium", "low"]
+    low_skill: bool                 # little skill on validation; hidden unless asked for
+    drivers: list[str]              # input families pushing the probability up
+    check: str                      # what this persona could check; never an instruction
+
+
+class Notes(BaseModel):
+    as_of_utc: datetime
+    origin_utc: datetime
+    persona: Persona
+    model: str
+    notes: list[Note]
+
+
 class Scores(BaseModel):
     rows: int
     mae_p50: float | None

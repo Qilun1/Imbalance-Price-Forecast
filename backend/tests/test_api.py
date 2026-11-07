@@ -193,7 +193,10 @@ def test_every_model_feature_has_a_label():
     if not metas:
         pytest.skip("no trained models")
     for meta in metas:
-        features = json.loads(meta.read_text(encoding="utf-8"))["features"]
+        content = json.loads(meta.read_text(encoding="utf-8"))
+        if "features" not in content:      # event classifiers (alerts*): drivers are grouped into families
+            continue
+        features = content["features"]
         assert not [f for f in features if f not in LABELS], meta.parent.name
 
 

@@ -21,6 +21,8 @@ Commands
   diagnostics [--only learning,datasize,shap,calibration]   figures -> static_data/work/diagnostics/
   leakage [--n 60]              independent availability-rule check
   single-run --model NAME --origin TS   print one 10 h forecast
+  alerts build|evaluate|train|infer|leakage   event classifiers behind /api/notes
+                                (docs/plans/event_notes.md); "all" runs build -> train -> infer -> leakage
   pipeline --config FILE        features -> train val -> infer val -> score -> train final
                                 -> infer test -> export -> validate -> leakage
 """
@@ -209,6 +211,24 @@ def cmd_pipeline(a):
     cmd_leakage(argparse.Namespace(set=a.set, n=a.n))
 
 
+def cmd_alerts(a):
+    from tools.eval import alert_leakage
+    from tools.training import alert_train
+    steps = ["build", "train", "infer", "leakage"] if a.step == "all" else [a.step]
+    for step in steps:
+        if step == "build":
+            alert_train.training_table(rebuild=True)
+        elif step == "evaluate":
+            alert_train.evaluate()
+        elif step == "train":
+            for variant in ("val", "final"):
+                alert_train.train(variant)
+        elif step == "infer":
+            alert_train.infer_periods()
+        elif step == "leakage" and not alert_leakage.check(a.n):
+            sys.exit("alert leakage check failed")
+
+
 def main(argv=None):
     ensure_dirs()
     p = argparse.ArgumentParser(prog="tools.cli", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -245,6 +265,10 @@ def main(argv=None):
     s.set_defaults(f=cmd_single_run)
     s = sub.add_parser("pipeline"); s.add_argument("--config", required=True); s.add_argument("--set", default="v1")
     s.add_argument("--out"); s.add_argument("--n", type=int, default=60); s.set_defaults(f=cmd_pipeline)
+
+    s = sub.add_parser("alerts")
+    s.add_argument("step", choices=["build", "evaluate", "train", "infer", "leakage", "all"])
+    s.add_argument("--n", type=int, default=20); s.set_defaults(f=cmd_alerts)
 
     a = p.parse_args(argv)
     a.f(a)

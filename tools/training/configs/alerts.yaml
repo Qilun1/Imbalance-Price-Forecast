@@ -1,0 +1,19 @@
+# Event classifiers (docs/plans/event_notes.md): model family per event.
+# Chosen on validation only (alert_train.py --evaluate, 7 Sep - 4 Oct): the calibrated "rule" baseline
+# on the base forecast unless a learned family beats its Brier skill score by more than 0.02, since
+# one validation month is a noisy judge. The MLP lost on every event and is not used.
+name: alerts
+base_model: lgbm_v4s
+challenger_model: lgbm_v4ms
+min_bss_margin: 0.02
+low_skill_bss: 0.05      # events below this validation BSS are hidden from /notes by default
+families:
+  spike_high: lgbm
+  spike_low: rule
+  up_episode: rule
+  direction_flip: lgbm
+  extreme_price: rule
+  deep_negative: lgbm
+  large_up_activation: rule
+  large_down_activation: rule
+  forecast_miss: rule

@@ -20,7 +20,7 @@ import pandas as pd
 from imbalance import forecasts, store
 from imbalance.contract import DIRECTION_SERIES, FORECAST_COLUMNS, HORIZON_STEPS, STEP, TARGET_SERIES
 
-from backend.api.settings import MOCK_BASELINE, MOCK_CHALLENGER, MOCK_DB, MOCK_MODEL
+from backend.api.settings import MOCK_BASELINE, MOCK_CHALLENGER, MOCK_DB, MOCK_MODEL, MOCK_NOTES
 
 SEED = 20261107
 FIRST_ORIGIN = pd.Timestamp("2026-10-21T21:00:00Z")   # 22 Oct 00:00 Helsinki
@@ -233,6 +233,40 @@ def check_rows(df: pd.DataFrame) -> None:
     assert (df["data_cutoff_utc"] <= df["forecast_origin_utc"]).all(), "data cutoff after origin"
 
 
+MOCK_BASE_RATES = {"spike_high": 0.18, "spike_low": 0.15, "up_episode": 0.40, "direction_flip": 0.40,
+                   "extreme_price": 0.10, "deep_negative": 0.05, "large_up_activation": 0.13,
+                   "large_down_activation": 0.12, "forecast_miss": 0.08}
+MOCK_NOTE_DRIVERS = ["Price forecast", "Wind", "Recent balancing", "Spot price shape", "Cross-border flows",
+                     "Change since the previous forecast"]
+
+
+def _note_rows(model: pd.DataFrame, rng: np.random.Generator) -> pd.DataFrame:
+    """Invented event probabilities that follow the mock forecast, in the event_probs table's shape."""
+    from imbalance.alert_inference import COLS
+    from imbalance.events import EVENT_IDS, WINDOWS
+    df = model.copy()
+    df["window"] = pd.cut(df["step"], [0, *[b for _, b in WINDOWS.values()]], labels=list(WINDOWS)).astype(str)
+    g = df.groupby(["forecast_origin_utc", "window"], sort=False)
+    agg = g.agg(hi=("p_spike_high", "max"), lo=("p_spike_low", "max"), up=("p_up", "mean"),
+                width=("p90", "max")).reset_index()
+    agg["width"] = agg["width"] - g["p10"].min().to_numpy()
+    signal = {"spike_high": agg["hi"], "spike_low": agg["lo"], "up_episode": agg["up"], "direction_flip": agg["up"],
+              "extreme_price": agg["hi"] * 0.6, "deep_negative": agg["lo"] * 0.4, "large_up_activation": agg["up"] * 0.4,
+              "large_down_activation": (1 - agg["up"]) * 0.3, "forecast_miss": np.clip(agg["width"] / 400, 0, 1)}
+    frames = []
+    for event in EVENT_IDS:
+        p = np.clip(signal[event].to_numpy(float) + rng.normal(0, 0.03, len(agg)), 0.005, 0.95)
+        half = rng.uniform(0.001, 0.03, len(agg))
+        base = MOCK_BASE_RATES[event]
+        frames.append(pd.DataFrame({
+            "model": MOCK_NOTES, "forecast_origin_utc": agg["forecast_origin_utc"], "window": agg["window"],
+            "event": event, "p": p, "p_lo": np.clip(p - half, 0, 1), "p_hi": np.clip(p + half, 0, 1),
+            "base_rate": base, "lift": p / base, "threshold": min(0.6, 1.5 * base),
+            "confidence": np.where(half > 0.025, "low", np.where(half > 0.015, "medium", "high")),
+            "drivers": [";".join(rng.choice(MOCK_NOTE_DRIVERS, 2, replace=False)) for _ in range(len(agg))]}))
+    return pd.concat(frames, ignore_index=True)[COLS]
+
+
 def generate(path: Path = MOCK_DB) -> Path:
     """Rebuild the mock database from scratch. Same seed, same bytes of data."""
     rng = np.random.default_rng(SEED)
@@ -240,7 +274,8 @@ def generate(path: Path = MOCK_DB) -> Path:
     level, price, direction = _actual_series(grid, rng)
     model = _model_rows(grid, level, price, rng)
     baseline = _baseline_rows(grid, price)
-    challenger = _challenger_rows(model, rng)       # drawn last, so the main model's rows do not change
+    challenger = _challenger_rows(model, rng)       # drawn after the model, so the main model's rows do not change
+    notes = _note_rows(model, rng)                  # drawn last, for the same reason
     for rows in (model, baseline, challenger):
         check_rows(rows)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -248,6 +283,8 @@ def generate(path: Path = MOCK_DB) -> Path:
     forecasts.write(MOCK_MODEL, model, path)
     forecasts.write(MOCK_BASELINE, baseline, path)
     forecasts.write(MOCK_CHALLENGER, challenger, path)
+    from imbalance.alert_inference import write_probs
+    write_probs(notes, path)
     store.insert_observations(_observation_rows(grid, price, direction), "mock", path)
     return path
 

@@ -52,7 +52,7 @@ Versions are the ones pinned in `uv.lock` and `frontend/package-lock.json`.
 | NumPy | 2.5.4 | BSD-3-Clause (bundled parts 0BSD, MIT, Zlib, CC0-1.0) | Numerics |
 | PyArrow | 26.0.1 | Apache-2.0 | Parquet |
 | DuckDB | 2.0.0 | MIT | Local data store |
-| scikit-learn | 1.9.1 | BSD-3-Clause | Calibration diagnostics |
+| scikit-learn | 1.9.1 | BSD-3-Clause | Calibration diagnostics; event classifiers (logistic regression, isotonic regression for Venn–Abers calibration) |
 | SciPy | 1.18.1 | BSD-3-Clause | Dependency of scikit-learn |
 | requests | 2.34.2 | Apache-2.0 | HTTP ingest |
 | PyYAML | 6.0.3 | MIT | Model configs |

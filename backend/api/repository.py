@@ -9,12 +9,14 @@ Mock and real data use the same tables, so there is one code path and only the f
 """
 from __future__ import annotations
 
+import json
 from functools import lru_cache
 
 import pandas as pd
 
-from imbalance import forecasts, store
+from imbalance import alert_inference, forecasts, store
 from imbalance.contract import DIRECTION_SERIES, SPOT_SERIES, TARGET_SERIES
+from imbalance.paths import ARTIFACTS_DIR
 from tools.eval.baseline import rows_available_at
 
 from backend.api.settings import Period, Settings, get_settings
@@ -52,22 +54,31 @@ class Repository:
         self._challenger_by_origin = dict(tuple(self.challenger.groupby("forecast_origin_utc")))
         self.origins = pd.DatetimeIndex(sorted(self._primary_by_origin))
         self.observations = store.load_observations(list(DISPLAY_SERIES), settings.store_db)
+        self.event_probs = self._load("notes")
+        self._notes_by_origin = dict(tuple(self.event_probs.groupby("forecast_origin_utc")))
+        self.low_skill = {p.notes: _low_skill_events(p.notes) for p in settings.periods if p.notes}
 
     def _load(self, role: str) -> pd.DataFrame:
-        """Forecast rows of every period, each limited to the origins that period answers for."""
+        """Rows of every period, each limited to the origins that period answers for: forecasts, or
+        event probabilities for role "notes"."""
         frames = []
         periods = self.settings.periods
         for i, period in enumerate(periods):
             if getattr(period, role) is None:
                 continue
-            df = forecasts.read(getattr(period, role), None, self.settings.forecast_db)
+            if role == "notes":
+                df = alert_inference.read_probs(period.notes, None, self.settings.forecast_db)
+            else:
+                df = forecasts.read(getattr(period, role), None, self.settings.forecast_db)
             if period.first_origin is not None:
                 df = df[df["forecast_origin_utc"] >= period.first_origin]
             if i + 1 < len(periods):
                 df = df[df["forecast_origin_utc"] < periods[i + 1].first_origin]
             if not df.empty:
                 frames.append(df)
-        return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=forecasts.COLS)
+        if frames:
+            return pd.concat(frames, ignore_index=True)
+        return pd.DataFrame(columns=alert_inference.COLS if role == "notes" else forecasts.COLS)
 
     # ---------- viewing time ----------
     def resolve_as_of(self, as_of) -> pd.Timestamp:
@@ -101,6 +112,11 @@ class Repository:
             return None
         return rows.sort_values("step").reset_index(drop=True)
 
+    def event_notes(self, origin: pd.Timestamp) -> pd.DataFrame | None:
+        """Event probabilities made at the origin, or None if no notes model answers for it."""
+        rows = self._notes_by_origin.get(origin)
+        return None if rows is None else rows.reset_index(drop=True)
+
     # ---------- actuals ----------
     def actuals(self, as_of: pd.Timestamp, start: pd.Timestamp | None = None, end: pd.Timestamp | None = None) -> pd.DataFrame:
         """Price and direction usable at `as_of`, optionally for quarter-hours in [start, end)."""
@@ -120,6 +136,16 @@ class Repository:
     def period_origins(self, period: Period) -> pd.DatetimeIndex:
         rows = self.primary[self.primary["model"] == period.model]
         return pd.DatetimeIndex(sorted(rows["forecast_origin_utc"].unique()))
+
+
+def _low_skill_events(model: str) -> frozenset[str]:
+    """Events whose validation Brier skill was below the bundle's bar (meta.json); none if unknown."""
+    path = ARTIFACTS_DIR / model / "meta.json"
+    if not path.exists():
+        return frozenset()
+    meta = json.loads(path.read_text())
+    bar = meta.get("low_skill_bss", 0.0)
+    return frozenset(e for e, bss in meta.get("validation_bss", {}).items() if bss is not None and bss < bar)
 
 
 @lru_cache
