@@ -18,6 +18,8 @@ from imbalance import forecasts, store
 from imbalance.contract import DIRECTION_SERIES, SPOT_SERIES, STEP, TARGET_SERIES
 from tools.eval.baseline import rows_available_at
 
+from backend.api.alerts import build_alerts
+from backend.api.schemas import Alert
 from backend.api.settings import Period, Settings, get_settings
 
 DISPLAY_SERIES = (TARGET_SERIES, DIRECTION_SERIES, SPOT_SERIES)
@@ -50,6 +52,7 @@ class Repository:
         self.origins = pd.DatetimeIndex(sorted(self._primary_by_origin))
         self.observations = store.load_observations(list(DISPLAY_SERIES), settings.store_db)
         self._spot_rows = self.observations[self.observations["series_id"] == SPOT_SERIES]
+        self._alerts_by_origin: dict[pd.Timestamp, list[Alert]] = {}
 
     def _load(self, role: str) -> pd.DataFrame:
         """Forecast rows of every period, each limited to the origins that period answers for."""
@@ -88,6 +91,17 @@ class Repository:
         if previous is None or previous["model"].iloc[0] != self._primary_by_origin[origin]["model"].iloc[0]:
             return None
         return previous.sort_values("step").reset_index(drop=True)
+
+    def alerts_at(self, origin: pd.Timestamp) -> list[Alert]:
+        """The alerts of one forecast. A past forecast never changes, so each is built once."""
+        if origin not in self._alerts_by_origin:
+            self._alerts_by_origin[origin] = build_alerts(self.forecast(origin), self.previous_forecast(origin))
+        return self._alerts_by_origin[origin]
+
+    def prepare_alerts(self) -> None:
+        """Build every forecast's alerts ahead of the first history request."""
+        for origin in self.origins:
+            self.alerts_at(origin)
 
     # ---------- observed values ----------
     def actuals(self, as_of: pd.Timestamp, start: pd.Timestamp | None = None, end: pd.Timestamp | None = None) -> pd.DataFrame:

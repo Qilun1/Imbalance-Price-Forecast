@@ -96,6 +96,28 @@ class Alerts(BaseModel):
     alerts: list[Alert]
 
 
+class SituationHour(BaseModel):
+    """How many situations were open at one forecast. Hours with none are left out."""
+    origin_utc: datetime
+    review: int
+    watch: int
+
+
+class Situation(BaseModel):
+    """One situation, from the forecast that first raised it to the last one that still did."""
+    first_origin_utc: datetime
+    last_origin_utc: datetime
+    alert: Alert
+
+
+class AlertHistory(BaseModel):
+    as_of_utc: datetime
+    from_utc: datetime
+    to_utc: datetime
+    hours: list[SituationHour]
+    situations: list[Situation]
+
+
 class Scores(BaseModel):
     rows: int
     mae_p50: float | None
@@ -136,6 +158,25 @@ class Performance(BaseModel):
     to_utc: datetime
     official: OfficialScores | None
     diagnostic: DiagnosticScores
+
+
+class HindsightPoint(BaseModel):
+    delivery_start_utc: datetime
+    p10: float
+    p50: float
+    p90: float
+    baseline_p50: float | None
+    actual: float | None
+    spot: float | None
+
+
+class Hindsight(BaseModel):
+    """Each quarter-hour as forecast `lead_hours` ahead, against what happened."""
+    as_of_utc: datetime
+    from_utc: datetime
+    to_utc: datetime
+    lead_hours: int
+    points: list[HindsightPoint]
 
 
 class PeriodInfo(BaseModel):

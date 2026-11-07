@@ -203,6 +203,49 @@ def test_spot_on_the_clock_change_day_covers_the_extra_hour(repo):
     assert len(day) == 100 and set(day) == {pd.Timestamp("2026-10-24T11:00:00Z")}
 
 
+def test_history_lists_each_situation_once(client):
+    body = client.get("/api/alerts/history").json()
+    assert body["hours"] and body["situations"]
+    assert {s["alert"]["kind"] for s in body["situations"]} >= {"spike_risk", "regulation_expected", "forecast_changed",
+                                                                "high_uncertainty", "stale_data", "conflicting_signals"}
+    assert any(s["first_origin_utc"] < s["last_origin_utc"] for s in body["situations"]), "a situation can last hours"
+    per_hour = client.get("/api/alerts", params={"as_of": body["hours"][0]["origin_utc"]}).json()["alerts"]
+    assert body["hours"][0]["review"] + body["hours"][0]["watch"] == len(per_hour)
+
+
+def test_history_never_looks_past_the_viewing_time(client):
+    as_of = "2026-10-24T00:00:00Z"
+    body = client.get("/api/alerts/history", params={"as_of": as_of, "to": "2026-10-29T00:00:00Z"}).json()
+    assert max(h["origin_utc"] for h in body["hours"]) <= as_of
+    assert max(s["last_origin_utc"] for s in body["situations"]) <= as_of
+
+
+def test_hindsight_gives_each_quarter_hour_once_at_the_chosen_lead_time(client, repo):
+    params = {"as_of": "2026-10-28T20:00:00Z", "from": "2026-10-23T00:00:00Z", "to": "2026-10-24T00:00:00Z"}
+    near = client.get("/api/hindsight", params={**params, "lead_hours": 1}).json()
+    far = client.get("/api/hindsight", params={**params, "lead_hours": 10}).json()
+    times = [p["delivery_start_utc"] for p in near["points"]]
+    assert len(times) == 96 and len(set(times)) == 96 and times == sorted(times)
+    assert near["lead_hours"] == 1 and all(p["actual"] is not None and p["spot"] is not None for p in near["points"])
+    made_10_hours_ahead = repo.primary[(repo.primary["delivery_start_utc"] == pd.Timestamp("2026-10-23T13:00:00Z"))
+                                       & (repo.primary["step"] == 37)]
+    by_time = {p["delivery_start_utc"]: p for p in far["points"]}
+    assert by_time["2026-10-23T13:00:00Z"]["p50"] == pytest.approx(made_10_hours_ahead["p50"].iloc[0], abs=0.01)
+
+
+def test_hindsight_never_shows_a_later_forecast_or_price(client):
+    as_of = pd.Timestamp("2026-10-23T07:00:00Z")
+    body = client.get("/api/hindsight", params={"as_of": iso(as_of), "to": "2026-10-29T00:00:00Z", "lead_hours": 2}).json()
+    times = pd.to_datetime([p["delivery_start_utc"] for p in body["points"]], utc=True)
+    assert times.max() <= as_of + pd.Timedelta(hours=2)
+    known = [p for p in body["points"] if p["actual"] is not None]
+    assert pd.Timestamp(known[-1]["delivery_start_utc"]) == as_of - pd.Timedelta(minutes=75)
+
+
+def test_hindsight_rejects_a_lead_time_outside_the_horizon(client):
+    assert client.get("/api/hindsight", params={"lead_hours": 11}).status_code == 422
+
+
 def test_every_model_feature_has_a_label():
     metas = sorted(ARTIFACTS_DIR.glob("*/meta.json"))   # models are not tracked: only those trained locally
     if not metas:

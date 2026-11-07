@@ -20,9 +20,10 @@ import numpy as np
 import pandas as pd
 
 from backend.api.labels import label_for
-from backend.api.schemas import Alert, Driver
+from backend.api.schemas import Alert, Driver, Situation, SituationHour
 
 STEP = pd.Timedelta(minutes=15)
+HOUR = pd.Timedelta(hours=1)
 DISPLAY_TZ = "UTC"
 NORMAL_DATA_AGE_MINUTES = 75
 _RISK_KINDS = ("spike_risk", "forecast_changed", "high_uncertainty", "regulation_expected")
@@ -217,3 +218,30 @@ def build_alerts(current: pd.DataFrame, previous: pd.DataFrame | None, th: Thres
               *_revision(cur, th), *_regulation(cur, th), *_uncertainty(cur, th), *_conflict(cur, th), *_stale(cur, th)]
     alerts += _expert_reviews(cur, alerts, th)
     return sorted(alerts, key=lambda a: (a.severity != "review", a.window_start_utc))
+
+
+def build_history(alerts_by_origin: dict[pd.Timestamp, list[Alert]]) -> tuple[list[SituationHour], list[Situation]]:
+    """Per-hour counts, plus each situation once. A situation runs on while the next hour's forecast
+    raises the same kind of alert with the same title for an overlapping window."""
+    hours: list[SituationHour] = []
+    situations: list[Situation] = []
+    open_now: dict[tuple[str, str], list[Situation]] = {}
+    for origin in sorted(alerts_by_origin):
+        alerts = alerts_by_origin[origin]
+        if alerts:
+            review = sum(a.severity == "review" for a in alerts)
+            hours.append(SituationHour(origin_utc=origin, review=review, watch=len(alerts) - review))
+        still_open: dict[tuple[str, str], list[Situation]] = {}
+        for alert in alerts:
+            key = (alert.kind, alert.title)
+            running = next((s for s in open_now.get(key, []) if pd.Timestamp(s.last_origin_utc) == origin - HOUR
+                            and alert.window_start_utc < s.alert.window_end_utc
+                            and s.alert.window_start_utc < alert.window_end_utc), None)
+            if running is None:
+                running = Situation(first_origin_utc=origin, last_origin_utc=origin, alert=alert)
+                situations.append(running)
+            else:
+                running.last_origin_utc = origin
+            still_open.setdefault(key, []).append(running)
+        open_now = still_open
+    return hours, situations

@@ -21,7 +21,8 @@ from imbalance.contract import SCORER, SPIKE_MARGIN
 from imbalance.paths import WORK_DIR
 
 from backend.api.repository import Repository
-from backend.api.schemas import DiagnosticScores, HorizonScores, OfficialScores, Performance, Scores, ScoreSet
+from backend.api.schemas import (DiagnosticScores, Hindsight, HindsightPoint, HorizonScores, OfficialScores,
+                                 Performance, Scores, ScoreSet)
 
 OFFICIAL_NOTE = "Organiser's score.py, validation period, spike margin 50 EUR/MWh."
 DIAGNOSTIC_NOTE = ("Diagnostic, not an official score. Organiser's formulas over this window, using only prices "
@@ -81,6 +82,37 @@ def _read_official(model: str, label: str) -> ScoreSet | None:
     by_hour = [HorizonScores(horizon_hour=int(r["horizon_hour"]), **_scores(r.to_dict()))
                for _, r in pd.read_csv(folder / "score_by_horizon.csv").iterrows()]
     return ScoreSet(label=label, model=model, overall=Scores(**_scores(summary)), by_horizon=by_hour)
+
+
+def build_hindsight(repo: Repository, as_of: pd.Timestamp, start: pd.Timestamp, end: pd.Timestamp,
+                    lead_hours: int) -> Hindsight:
+    """Quarter-hours in [start, end) as forecast `lead_hours` ahead. Each hourly forecast gives four of
+    them at every lead time, so each quarter-hour appears exactly once."""
+    first_step = (lead_hours - 1) * STEPS_PER_HOUR + 1
+
+    def at_lead(frame: pd.DataFrame) -> pd.DataFrame:
+        if frame.empty:
+            return frame
+        keep = (frame["forecast_origin_utc"] <= as_of) & frame["step"].between(first_step, first_step + STEPS_PER_HOUR - 1)
+        keep &= (frame["delivery_start_utc"] >= start) & (frame["delivery_start_utc"] < end)
+        return frame.loc[keep]
+
+    def number(value) -> float | None:
+        return None if pd.isna(value) else round(float(value), 2)
+
+    model = at_lead(repo.primary)[["delivery_start_utc", "p10", "p50", "p90"]]
+    rows = model.merge(repo.actuals(as_of, start, end), on="delivery_start_utc", how="left")
+    baseline = at_lead(repo.baseline)
+    if baseline.empty:
+        rows = rows.assign(baseline_p50=float("nan"))
+    else:
+        rows = rows.merge(baseline[["delivery_start_utc", "p50"]].rename(columns={"p50": "baseline_p50"}),
+                          on="delivery_start_utc", how="left")
+    points = [HindsightPoint(delivery_start_utc=r.delivery_start_utc, p10=round(r.p10, 2), p50=round(r.p50, 2),
+                             p90=round(r.p90, 2), baseline_p50=number(r.baseline_p50),
+                             actual=number(r.imbalance_price), spot=number(r.spot))
+              for r in rows.sort_values("delivery_start_utc").itertuples(index=False)]
+    return Hindsight(as_of_utc=as_of, from_utc=start, to_utc=end, lead_hours=lead_hours, points=points)
 
 
 def official_scores(repo: Repository) -> OfficialScores | None:
