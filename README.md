@@ -4,6 +4,17 @@ WeatherSensAI team: forecast the Finnish imbalance price for the next 10 hours i
 (P10/P50/P90, regulation direction, spike probabilities), and a situational dashboard for energy
 experts.
 
+## Run the dashboard
+
+On Windows, from this folder:
+
+```powershell
+.\start-dashboard.cmd          # invented mock data, needs no licensed files
+.\start-dashboard.cmd real     # the pipeline's forecasts, see tools/README.md
+```
+
+Other systems and details: `frontend/README.md`.
+
 ## Repository layout
 
 | Folder | Purpose |
@@ -13,7 +24,7 @@ experts.
 | `backend/api/` | FastAPI app and routes for the dashboard |
 | `backend/artifacts/` | Trained model versions (gitignored) |
 | `backend/infer_data/` | Inferred 10 h forecast sets, one row per model version, origin and step (gitignored) |
-| `frontend/` | React (Vite + TypeScript) dashboard |
+| `frontend/` | Next.js dashboard, see `frontend/README.md` |
 | `static_data/` | Source data: raw pulls and the DuckDB store (gitignored, see its README) |
 | `tools/ingest/` | Fetch and normalise data into `static_data/` |
 | `tools/training/` | Model training and configs |
