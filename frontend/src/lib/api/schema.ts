@@ -89,6 +89,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/alerts/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Alert History */
+        get: operations["get_alert_history_api_alerts_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/performance": {
         parameters: {
             query?: never;
@@ -98,6 +115,23 @@ export interface paths {
         };
         /** Get Performance */
         get: operations["get_performance_api_performance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/hindsight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Hindsight */
+        get: operations["get_hindsight_api_hindsight_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -121,6 +155,8 @@ export interface components {
             imbalance_price: number | null;
             /** Direction */
             direction: ("up" | "down" | "none") | null;
+            /** Spot */
+            spot: number | null;
         };
         /** Actuals */
         Actuals: {
@@ -176,6 +212,28 @@ export interface components {
             evidence: {
                 [key: string]: number;
             };
+        };
+        /** AlertHistory */
+        AlertHistory: {
+            /**
+             * As Of Utc
+             * Format: date-time
+             */
+            as_of_utc: string;
+            /**
+             * From Utc
+             * Format: date-time
+             */
+            from_utc: string;
+            /**
+             * To Utc
+             * Format: date-time
+             */
+            to_utc: string;
+            /** Hours */
+            hours: components["schemas"]["SituationHour"][];
+            /** Situations */
+            situations: components["schemas"]["Situation"][];
         };
         /** Alerts */
         Alerts: {
@@ -268,6 +326,8 @@ export interface components {
             data_cutoff_utc: string | null;
             /** Data Age Minutes */
             data_age_minutes: number | null;
+            /** Spot Known Until Utc */
+            spot_known_until_utc: string | null;
             /** Steps */
             steps: components["schemas"]["ForecastStep"][];
         };
@@ -296,6 +356,8 @@ export interface components {
             p_spike_high: number;
             /** P Spike Low */
             p_spike_low: number;
+            /** Spot */
+            spot: number | null;
             /** Drivers */
             drivers: components["schemas"]["Driver"][];
         };
@@ -303,6 +365,51 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * Hindsight
+         * @description Each quarter-hour as forecast `lead_hours` ahead, against what happened.
+         */
+        Hindsight: {
+            /**
+             * As Of Utc
+             * Format: date-time
+             */
+            as_of_utc: string;
+            /**
+             * From Utc
+             * Format: date-time
+             */
+            from_utc: string;
+            /**
+             * To Utc
+             * Format: date-time
+             */
+            to_utc: string;
+            /** Lead Hours */
+            lead_hours: number;
+            /** Points */
+            points: components["schemas"]["HindsightPoint"][];
+        };
+        /** HindsightPoint */
+        HindsightPoint: {
+            /**
+             * Delivery Start Utc
+             * Format: date-time
+             */
+            delivery_start_utc: string;
+            /** P10 */
+            p10: number;
+            /** P50 */
+            p50: number;
+            /** P90 */
+            p90: number;
+            /** Baseline P50 */
+            baseline_p50: number | null;
+            /** Actual */
+            actual: number | null;
+            /** Spot */
+            spot: number | null;
         };
         /** HorizonScores */
         HorizonScores: {
@@ -422,6 +529,46 @@ export interface components {
             brier_spike_mean: number | null;
             /** Brier Direction */
             brier_direction: number | null;
+        };
+        /**
+         * Situation
+         * @description One situation, from the forecast that first raised it to the last one that still did.
+         */
+        Situation: {
+            /**
+             * First Origin Utc
+             * Format: date-time
+             */
+            first_origin_utc: string;
+            /**
+             * Last Origin Utc
+             * Format: date-time
+             */
+            last_origin_utc: string;
+            alert: components["schemas"]["Alert"];
+            /**
+             * Outcome
+             * @default pending
+             * @enum {string}
+             */
+            outcome: "happened" | "did_not_happen" | "pending" | "not_applicable";
+            /** Outcome Note */
+            outcome_note?: string | null;
+        };
+        /**
+         * SituationHour
+         * @description How many situations were open at one forecast. Hours with none are left out.
+         */
+        SituationHour: {
+            /**
+             * Origin Utc
+             * Format: date-time
+             */
+            origin_utc: string;
+            /** Review */
+            review: number;
+            /** Watch */
+            watch: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -597,6 +744,42 @@ export interface operations {
             };
         };
     };
+    get_alert_history_api_alerts_history_get: {
+        parameters: {
+            query?: {
+                /** @description First forecast time; the first forecast if omitted */
+                from?: string | null;
+                /** @description End of the range, exclusive; nothing after as_of is ever included */
+                to?: string | null;
+                /** @description Viewing time; the newest forecast if omitted */
+                as_of?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertHistory"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_performance_api_performance_get: {
         parameters: {
             query?: {
@@ -620,6 +803,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Performance"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_hindsight_api_hindsight_get: {
+        parameters: {
+            query?: {
+                /** @description First quarter-hour; 7 days before as_of if omitted */
+                from?: string | null;
+                /** @description End of the range, exclusive; as_of if omitted */
+                to?: string | null;
+                /** @description How many hours ahead the forecast was made */
+                lead_hours?: number;
+                /** @description Viewing time; the newest forecast if omitted */
+                as_of?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Hindsight"];
                 };
             };
             /** @description Validation Error */
