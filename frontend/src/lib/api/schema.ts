@@ -106,6 +106,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Notes */
+        get: operations["get_notes_api_notes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/performance": {
         parameters: {
             query?: never;
@@ -132,6 +149,23 @@ export interface paths {
         };
         /** Get Hindsight */
         get: operations["get_hindsight_api_hindsight_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/umm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Umm */
+        get: operations["get_umm_api_umm_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -404,6 +438,10 @@ export interface components {
             p50: number;
             /** P90 */
             p90: number;
+            /** P Up */
+            p_up: number;
+            /** P Down */
+            p_down: number;
             /** Baseline P50 */
             baseline_p50: number | null;
             /** Actual */
@@ -459,6 +497,79 @@ export interface components {
             spike_margin_eur_mwh: number;
             /** Display Timezone */
             display_timezone: string;
+        };
+        /**
+         * Note
+         * @description One event's probability in one window, from the event classifiers (docs/plans/event_notes.md).
+         */
+        Note: {
+            /** Event */
+            event: string;
+            /** Title */
+            title: string;
+            /** Definition */
+            definition: string;
+            /**
+             * Window
+             * @enum {string}
+             */
+            window: "now" | "soon" | "later";
+            /** Window Label */
+            window_label: string;
+            /**
+             * Window Start Utc
+             * Format: date-time
+             */
+            window_start_utc: string;
+            /**
+             * Window End Utc
+             * Format: date-time
+             */
+            window_end_utc: string;
+            /** Probability */
+            probability: number;
+            /** Probability Low */
+            probability_low: number;
+            /** Probability High */
+            probability_high: number;
+            /** Base Rate */
+            base_rate: number;
+            /** Lift */
+            lift: number;
+            /** Threshold */
+            threshold: number;
+            /** Fires */
+            fires: boolean;
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "high" | "medium" | "low";
+            /** Low Skill */
+            low_skill: boolean;
+            /** Drivers */
+            drivers: string[];
+            /** Check */
+            check: string;
+        };
+        /** Notes */
+        Notes: {
+            /**
+             * As Of Utc
+             * Format: date-time
+             */
+            as_of_utc: string;
+            /**
+             * Origin Utc
+             * Format: date-time
+             */
+            origin_utc: string;
+            /** Persona */
+            persona: ("trader" | "operator") | null;
+            /** Model */
+            model: string;
+            /** Notes */
+            notes: components["schemas"]["Note"][];
         };
         /**
          * OfficialScores
@@ -571,6 +682,56 @@ export interface components {
             review: number;
             /** Watch */
             watch: number;
+        };
+        /** UmmFeed */
+        UmmFeed: {
+            /**
+             * As Of Utc
+             * Format: date-time
+             */
+            as_of_utc: string;
+            /** Available */
+            available: boolean;
+            /** Messages */
+            messages: components["schemas"]["UmmMessage"][];
+        };
+        /** UmmMessage */
+        UmmMessage: {
+            /** Message Id */
+            message_id: string;
+            /** Version */
+            version: number;
+            /** Kind */
+            kind: string;
+            /** Unplanned */
+            unplanned: boolean;
+            /** Units */
+            units: string[];
+            /** Fuel */
+            fuel: string | null;
+            /** Unavailable Mw */
+            unavailable_mw: number;
+            /**
+             * Event Start Utc
+             * Format: date-time
+             */
+            event_start_utc: string;
+            /**
+             * Event Stop Utc
+             * Format: date-time
+             */
+            event_stop_utc: string;
+            /**
+             * Publication Utc
+             * Format: date-time
+             */
+            publication_utc: string;
+            /** Fresh */
+            fresh: boolean;
+            /** Reason */
+            reason: string | null;
+            /** Url */
+            url: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -782,6 +943,44 @@ export interface operations {
             };
         };
     };
+    get_notes_api_notes_get: {
+        parameters: {
+            query?: {
+                /** @description trader or operator (CHP with electric boilers); every event if omitted */
+                persona?: ("trader" | "operator") | null;
+                /** @description Viewing time; the newest forecast if omitted */
+                as_of?: string | null;
+                /** @description Per-event thresholds overriding the defaults, e.g. spike_high:0.3,extreme_price:0.2 */
+                thresholds?: string | null;
+                /** @description Also return events with little validation skill */
+                include_low_skill?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Notes"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_performance_api_performance_get: {
         parameters: {
             query?: {
@@ -843,6 +1042,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Hindsight"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_umm_api_umm_get: {
+        parameters: {
+            query?: {
+                /** @description Viewing time; the newest forecast if omitted */
+                as_of?: string | null;
+                /** @description Look-ahead window */
+                hours?: number;
+                /** @description Smallest unavailable capacity to show */
+                min_mw?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UmmFeed"];
                 };
             };
             /** @description Validation Error */

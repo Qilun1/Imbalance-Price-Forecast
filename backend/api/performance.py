@@ -100,7 +100,7 @@ def build_hindsight(repo: Repository, as_of: pd.Timestamp, start: pd.Timestamp, 
     def number(value) -> float | None:
         return None if pd.isna(value) else round(float(value), 2)
 
-    model = at_lead(repo.primary)[["delivery_start_utc", "p10", "p50", "p90"]]
+    model = at_lead(repo.primary)[["delivery_start_utc", "p10", "p50", "p90", "p_up", "p_down"]]
     rows = model.merge(repo.actuals(as_of, start, end), on="delivery_start_utc", how="left")
     baseline = at_lead(repo.baseline)
     if baseline.empty:
@@ -109,7 +109,8 @@ def build_hindsight(repo: Repository, as_of: pd.Timestamp, start: pd.Timestamp, 
         rows = rows.merge(baseline[["delivery_start_utc", "p50"]].rename(columns={"p50": "baseline_p50"}),
                           on="delivery_start_utc", how="left")
     points = [HindsightPoint(delivery_start_utc=r.delivery_start_utc, p10=round(r.p10, 2), p50=round(r.p50, 2),
-                             p90=round(r.p90, 2), baseline_p50=number(r.baseline_p50),
+                             p90=round(r.p90, 2), p_up=round(r.p_up, 4), p_down=round(r.p_down, 4),
+                             baseline_p50=number(r.baseline_p50),
                              actual=number(r.imbalance_price), spot=number(r.spot))
               for r in rows.sort_values("delivery_start_utc").itertuples(index=False)]
     return Hindsight(as_of_utc=as_of, from_utc=start, to_utc=end, lead_hours=lead_hours, points=points)

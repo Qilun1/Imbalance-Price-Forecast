@@ -15,9 +15,22 @@ export function color(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(`--color-${name}`).trim();
 }
 
+/** The production CSS is minified, so a token such as `#ffffff` can arrive here as `#fff`. */
+function channels(hex: string): number[] {
+  const digits = hex.slice(1);
+  const full = digits.length === 3 ? [...digits].map((digit) => digit + digit).join("") : digits;
+  return [0, 2, 4].map((start) => Number.parseInt(full.slice(start, start + 2), 16));
+}
+
 export function withAlpha(hex: string, opacity: number): string {
-  const channels = [1, 3, 5].map((start) => Number.parseInt(hex.slice(start, start + 2), 16));
-  return `rgba(${channels.join(",")},${opacity})`;
+  return `rgba(${channels(hex).join(",")},${opacity})`;
+}
+
+/** A solid tint of `hex` on `background`. Unlike `withAlpha` it hides what is drawn behind it. */
+export function tint(hex: string, opacity: number, background: string): string {
+  const under = channels(background);
+  const mixed = channels(hex).map((channel, index) => Math.round(channel * opacity + (under[index] ?? 0) * (1 - opacity)));
+  return `rgb(${mixed.join(",")})`;
 }
 
 /** Midnight ticks get the date, the others the time. Every chart holds quarter-hours, so midnight is always there. */
@@ -30,7 +43,12 @@ function axisLabel(time: number): string {
 export const PRICE_FORMAT = { type: "custom", formatter: (price: number) => formatPrice(price), minMove: 0.01 } as const;
 
 export function headingStyle(): HeadingStyle {
-  return { font: `12px ${getComputedStyle(document.body).fontFamily}`, color: color("chart-axis"), background: color("surface") };
+  return {
+    font: `12px ${getComputedStyle(document.body).fontFamily}`,
+    color: color("chart-axis"),
+    noteColor: color("ink"),
+    background: color("surface"),
+  };
 }
 
 export function baseOptions(): DeepPartial<ChartOptions> {

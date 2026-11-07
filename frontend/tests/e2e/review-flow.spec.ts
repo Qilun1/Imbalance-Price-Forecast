@@ -195,8 +195,26 @@ test("the arrow keys read the chart one quarter-hour at a time", async ({ page }
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("ArrowRight");
   await expect(time).toHaveText("23 Oct 09:15");
-  await expect(page.locator("[data-field=up]")).not.toHaveText("–");
+  await expect(page.locator("[data-field=direction]")).toContainText(/up <?\d+%/);
   await page.keyboard.press("Escape");
+  await expect(time).toHaveText("23 Oct 09:00");
+});
+
+test("a key figure shows its time in the chart, and pressing it again lets go", async ({ page }) => {
+  await page.goto(`/?as_of=${SPIKE}`);
+  const time = page.locator("[data-field=time]");
+  await expect(time).toHaveText("23 Oct 09:00");
+  // A figure brings the history back to one day.
+  await page.getByRole("radio", { name: "1 week" }).click();
+  await expect(page.getByRole("radio", { name: "1 week" })).toHaveAttribute("data-state", "on");
+  const highest = page.getByRole("button", { name: "Show the highest price in the chart" });
+  const at = await highest.locator("xpath=..").getByText(/^At \d\d:\d\d$/).textContent();
+  await highest.click();
+  await expect(highest).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("radio", { name: "1 day" })).toHaveAttribute("data-state", "on");
+  await expect(time).toContainText(at?.replace("At ", "") ?? "missing");
+  await highest.click();
+  await expect(highest).toHaveAttribute("aria-pressed", "false");
   await expect(time).toHaveText("23 Oct 09:00");
 });
 

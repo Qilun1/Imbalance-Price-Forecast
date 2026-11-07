@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import type { Changes, Forecast, ForecastStep, HindsightPoint } from "@/lib/api/client";
+import type { Forecast, ForecastStep, HindsightPoint } from "@/lib/api/client";
 import { exposure } from "@/lib/exposure";
-import { directionOf, evidenceItems, headline, rankDrivers, revisionTrail, spread, stepsInWindow, upToLastActual } from "@/lib/forecast";
+import {
+  directionOf,
+  evidenceItems,
+  figureWindow,
+  headline,
+  rankDrivers,
+  revisionTrail,
+  spread,
+  stepsInWindow,
+  upToLastActual,
+} from "@/lib/forecast";
 
 const WIND = { id: "wind_fc", label: "Wind power forecast" };
 const LOAD = { id: "cons_fc", label: "Consumption forecast" };
@@ -37,7 +47,6 @@ function forecast(steps: ForecastStep[], origin = "2026-10-23T12:00:00Z"): Forec
   };
 }
 
-const NO_CHANGES: Changes = { as_of_utc: "", origin_utc: "", previous_origin_utc: null, largest_p50_change: null, points: [] };
 
 describe("direction", () => {
   it("picks the most likely direction", () => {
@@ -70,6 +79,8 @@ describe("upToLastActual", () => {
       p10: 20,
       p50: 40,
       p90: 80,
+      p_up: 0.5,
+      p_down: 0.3,
       baseline_p50: null,
       actual,
       spot: 30,
@@ -99,43 +110,40 @@ describe("headline", () => {
     const steps = [0, 1, 2, 3, 4, 5].map((i) => step(i, { p50: 40 + i * 10 }));
     steps[5] = step(5, { p50: 15 });
     steps[4] = step(4, { p50: 120 });
-    const result = headline(forecast(steps), NO_CHANGES);
+    const result = headline(forecast(steps));
     expect(result?.nextHour.p50).toBe((40 + 50 + 60 + 70) / 4);
     expect(result?.highest).toEqual({ price: 120, at: steps[4]?.delivery_start_utc });
     expect(result?.lowest).toEqual({ price: 15, at: steps[5]?.delivery_start_utc });
-    expect(result?.revision).toBeNull();
-    expect(result?.nextHour.change).toBeNull();
   });
 
   it("reads the direction across the whole next hour, not its first quarter-hour", () => {
     const up = { p_up: 0.6, p_down: 0.3, p_none: 0.1 };
     const down = { p_up: 0.1, p_down: 0.8, p_none: 0.1 };
     const steps = [step(0, up), step(1, down), step(2, down), step(3, down), step(4, up), step(5, up), step(6, up), step(7, up)];
-    const result = headline(forecast(steps), NO_CHANGES);
+    const result = headline(forecast(steps));
     expect(result?.direction.direction).toBe("down");
     expect(result?.direction.probability).toBeCloseTo((0.3 + 0.8 * 3) / 4);
   });
 
-  it("takes the largest revision by size, keeping its sign", () => {
-    const steps = [step(0), step(1), step(2), step(3), step(4)];
-    const point = (at: string, change: number) => ({
-      delivery_start_utc: at,
-      p50: 0,
-      p50_previous: 0,
-      p50_change: change,
-      p_up_change: 0,
-      p_spike_high_change: 0,
-      p_spike_low_change: 0,
-    });
-    const at = steps.map((s) => s.delivery_start_utc) as [string, string, string, string, string];
-    const changes = { ...NO_CHANGES, previous_origin_utc: "2026-10-23T11:00:00Z", points: [point(at[1], 5), point(at[4], -30)] };
-    const result = headline(forecast(steps), changes);
-    expect(result?.revision).toEqual({ change: -30, at: at[4], since: "2026-10-23T11:00:00Z" });
-    expect(result?.nextHour.change).toBe(5);
+  it("gives nothing for an empty forecast", () => {
+    expect(headline(forecast([]))).toBeNull();
+  });
+});
+
+describe("figureWindow", () => {
+  const steps = [0, 1, 2, 3, 4, 5].map((i) => step(i, { p50: 40 + i * 10 }));
+  const top = headline(forecast(steps));
+  if (!top) throw new Error("headline needs steps");
+
+  it("shows the whole next hour for the next hour's price and direction", () => {
+    const hour = { start: "2026-10-23T12:00:00Z", end: "2026-10-23T13:00:00Z" };
+    expect(figureWindow("nextHour", top)).toEqual(hour);
+    expect(figureWindow("direction", top)).toEqual(hour);
   });
 
-  it("gives nothing for an empty forecast", () => {
-    expect(headline(forecast([]), undefined)).toBeNull();
+  it("shows only the quarter-hour of the highest or lowest price", () => {
+    expect(figureWindow("highest", top)).toEqual({ start: "2026-10-23T13:15:00Z", end: "2026-10-23T13:30:00Z" });
+    expect(figureWindow("lowest", top)).toEqual({ start: "2026-10-23T12:00:00Z", end: "2026-10-23T12:15:00Z" });
   });
 });
 

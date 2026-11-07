@@ -1,5 +1,6 @@
 /** Reading a forecast: the plain calculations behind the KPI row, drivers and revision trail. */
-import type { Alert, Changes, Driver, Forecast, ForecastStep, HindsightPoint } from "@/lib/api/client";
+import type { Alert, Driver, Forecast, ForecastStep, HindsightPoint } from "@/lib/api/client";
+import { addMinutes } from "@/lib/format";
 
 export const STEPS_PER_HOUR = 4;
 
@@ -52,15 +53,14 @@ function extreme(steps: readonly ForecastStep[], sign: 1 | -1) {
 }
 
 export type Headline = {
-  nextHour: { p50: number; p10: number; p90: number; change: number | null };
+  nextHour: { p50: number; p10: number; p90: number; at: string };
   highest: { price: number; at: string };
   lowest: { price: number; at: string };
   direction: { direction: Direction; probability: number };
-  revision: { change: number; at: string; since: string } | null;
 };
 
-/** The five numbers in the KPI row, or null when a forecast has no steps. */
-export function headline(forecast: Forecast, changes: Changes | undefined): Headline | null {
+/** The four numbers in the KPI row, or null when a forecast has no steps. */
+export function headline(forecast: Forecast): Headline | null {
   const { steps } = forecast;
   if (!steps.length) return null;
   const nextHour = steps.slice(0, STEPS_PER_HOUR);
@@ -69,28 +69,29 @@ export function headline(forecast: Forecast, changes: Changes | undefined): Head
     p_down: mean(nextHour.map((step) => step.p_down)),
     p_none: mean(nextHour.map((step) => step.p_none)),
   };
-  const points = changes?.points ?? [];
-  const nextHourTimes = new Set(nextHour.map((step) => step.delivery_start_utc));
-  const nextHourChanges = points.filter((point) => nextHourTimes.has(point.delivery_start_utc));
-  const largest = points.reduce<(typeof points)[number] | null>(
-    (best, point) => (best === null || Math.abs(point.p50_change) > Math.abs(best.p50_change) ? point : best),
-    null,
-  );
   return {
     nextHour: {
       p50: mean(nextHour.map((step) => step.p50)),
       p10: mean(nextHour.map((step) => step.p10)),
       p90: mean(nextHour.map((step) => step.p90)),
-      change: nextHourChanges.length ? mean(nextHourChanges.map((point) => point.p50_change)) : null,
+      at: steps[0]?.delivery_start_utc ?? forecast.origin_utc,
     },
     highest: extreme(steps, 1),
     lowest: extreme(steps, -1),
     direction: { direction: directionOf(likelihood), probability: directionProbability(likelihood) },
-    revision:
-      largest && changes?.previous_origin_utc
-        ? { change: largest.p50_change, at: largest.delivery_start_utc, since: changes.previous_origin_utc }
-        : null,
   };
+}
+
+/** The key figures on the Now screen that can be shown in the chart. */
+export type Figure = "nextHour" | "highest" | "lowest" | "direction";
+
+/** The quarter-hours a key figure is about: the whole next hour, or the one quarter-hour of a price. */
+export function figureWindow(figure: Figure, top: Headline): { start: string; end: string } {
+  if (figure === "highest" || figure === "lowest") {
+    const { at } = top[figure];
+    return { start: at, end: addMinutes(at, 15) };
+  }
+  return { start: top.nextHour.at, end: addMinutes(top.nextHour.at, 60) };
 }
 
 export type RankedDriver = Driver & { quarters: number };

@@ -201,6 +201,8 @@ class HindsightPoint(BaseModel):
     p10: float
     p50: float
     p90: float
+    p_up: float
+    p_down: float
     baseline_p50: float | None
     actual: float | None
     spot: float | None
