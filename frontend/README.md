@@ -10,11 +10,16 @@ The dashboard needs the API running behind it. On Windows, one command from the 
 opens the browser:
 
 ```powershell
-.\start-dashboard.cmd          # invented mock data, needs no licensed files
-.\start-dashboard.cmd real     # the pipeline's forecasts
+.\start-dashboard.cmd          # real data if the pipeline has run, otherwise invented mock data
+.\start-dashboard.cmd real     # the pipeline's forecasts (the submission ens_finald, its baseline and alerts)
+.\start-dashboard.cmd mock     # invented mock data, needs no licensed files
 ```
 
-The API opens in its own window. Close both windows to stop everything.
+Real data needs `static_data\static.duckdb` and `backend\infer_data\forecasts.duckdb` with the submission
+loaded into it: root README, "Reproduce the submission" (step 7 loads it), plus the organiser's baseline
+for both periods (`uv run python -m tools.cli baseline --period val` and `--period test`). The API opens in
+its own window and, on real data, spends about 30 s after start-up building every forecast's alerts; pages
+opened meanwhile wait for it. Close both windows to stop everything.
 
 To start them by hand, use two terminals, because the API keeps its terminal busy.
 
@@ -40,7 +45,7 @@ dashboard.
 | `npm run typecheck` | TypeScript only |
 | `npm run lint` | ESLint |
 | `npm test` | Unit tests for formatters and calculations |
-| `npm run test:e2e` | Browser tests with accessibility checks. Needs the API in mock mode and the dashboard running |
+| `npm run test:e2e` | Browser tests with accessibility checks. Needs the API in mock mode (`start-dashboard.cmd mock`) and the dashboard running |
 | `npm run contrast` | Checks every colour pair in `src/styles/tokens.css` against WCAG AA |
 | `npm run api:types` | Regenerates `src/lib/api/schema.ts` after an API change. Needs the API running |
 | `node scripts/screenshots.mjs` | Every screen, width and state into `screenshots/`. Mock mode only |

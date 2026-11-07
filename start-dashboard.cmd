@@ -1,8 +1,10 @@
 @echo off
 rem Starts the forecast API and the dashboard, then opens the browser.
 rem
-rem   start-dashboard.cmd         invented mock data, needs no licensed files
-rem   start-dashboard.cmd real    the pipeline's forecasts (run the pipeline first, see tools/README.md)
+rem   start-dashboard.cmd         real data if the stores exist (static_data\static.duckdb and
+rem                               backend\infer_data\forecasts.duckdb), otherwise invented mock data
+rem   start-dashboard.cmd real    the pipeline's forecasts (build them first: root README, "Reproduce the submission")
+rem   start-dashboard.cmd mock    invented mock data, needs no licensed files
 rem
 rem The API gets its own window. Close both windows to stop everything.
 
@@ -22,7 +24,10 @@ if not exist frontend\node_modules (
 )
 
 set IMBALANCE_DATA_MODE=mock
+if exist static_data\static.duckdb if exist backend\infer_data\forecasts.duckdb set IMBALANCE_DATA_MODE=real
 if /i "%~1"=="real" set IMBALANCE_DATA_MODE=real
+if /i "%~1"=="mock" set IMBALANCE_DATA_MODE=mock
+echo Data: %IMBALANCE_DATA_MODE%
 
 start "Imbalance API, %IMBALANCE_DATA_MODE% data" cmd /k .venv\Scripts\python.exe -m uvicorn backend.api.main:app --port 8000 --log-level warning
 

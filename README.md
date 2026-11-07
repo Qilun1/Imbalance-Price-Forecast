@@ -138,10 +138,17 @@ uv run python -m tools.eval.spike_shift --model ens_mixgd --apply
 uv run python -m tools.eval.band_width --model ens_mixgd_spk --apply
 # 6. Spike hedge: spike probabilities averaged 50/50 with the previous chain (ens_mixgd_spk_bw)
 for P in val test; do uv run python -m tools.eval.spike_hedge --base ens_bag8d_bw --other ens_mixgd_spk_bw --name ens_finald --period $P; done
-# 7. Dashboard: load the submission into the forecast store (the API's default model in real mode)
+# 7. Dashboard: load the submission into the forecast store (the API's default model in real mode), the
+#    organiser's baseline for both periods, the challenger (lgbm_v2) and the event classifiers (alerts)
 uv run python -m tools.eval.import_submission --model ens_finald --period test
 uv run python -m tools.eval.import_submission --model ens_finald --period val
+uv run python -m tools.cli baseline --period val
+uv run python -m tools.cli baseline --period test
+uv run python -m tools.cli pipeline --config tools/training/configs/lgbm_v2.yaml --set v2
+uv run python -m tools.cli alerts all
 ```
+
+Then `.\start-dashboard.cmd` serves all of it (it picks real data when the stores exist).
 
 The submission is `static_data/work/submissions/ens_finald_test.csv` (submit it as
 `forecast_backtest.csv`); every step runs the organiser's validator or scorer. The previous
