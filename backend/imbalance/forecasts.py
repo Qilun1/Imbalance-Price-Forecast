@@ -14,6 +14,7 @@ import pandas as pd
 
 from .contract import FORECAST_COLUMNS, TEMPLATE, submission_columns
 from .paths import INFER_DB
+from .store import open_duckdb
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS forecasts (
@@ -37,7 +38,7 @@ COLS = ["model", "forecast_origin_utc", "delivery_start_utc", "step", *FORECAST_
 @contextmanager
 def connect(path: Path = INFER_DB, read_only: bool = False):
     path.parent.mkdir(parents=True, exist_ok=True)
-    con = duckdb.connect(str(path), read_only=read_only and path.exists())
+    con = open_duckdb(path, read_only)
     try:
         con.execute("SET TimeZone = 'UTC'").fetchall()
         if not read_only:

@@ -78,10 +78,30 @@ CREATE TABLE IF NOT EXISTS ingest_log (
 """
 
 
+def open_duckdb(path: Path, read_only: bool = False, wait_s: float = 900.0):
+    """duckdb.connect that waits while another process holds the file lock (DuckDB allows one
+    writing process; on Windows even readers are blocked). Retries for up to wait_s seconds."""
+    import time
+    t0, said = time.monotonic(), False
+    while True:
+        try:
+            return duckdb.connect(str(path), read_only=read_only and path.exists())
+        except duckdb.IOException as e:
+            msg = str(e)
+            locked = "used by another process" in msg or "lock" in msg.lower()
+            if not locked or time.monotonic() - t0 > wait_s:
+                raise
+            if not said:
+                print(f"    {path.name} is in use by another process (e.g. diagnostics or status in another "
+                      f"terminal); waiting up to {wait_s / 60:.0f} min ...", flush=True)
+                said = True
+            time.sleep(5)
+
+
 @contextmanager
 def connect(path: Path = STATIC_DB, read_only: bool = False):
     path.parent.mkdir(parents=True, exist_ok=True)
-    con = duckdb.connect(str(path), read_only=read_only and path.exists())
+    con = open_duckdb(path, read_only)
     try:
         con.execute("SET TimeZone = 'UTC'").fetchall()
         if not read_only:
