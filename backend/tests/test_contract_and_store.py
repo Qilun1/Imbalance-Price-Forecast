@@ -42,12 +42,29 @@ needs_store = pytest.mark.skipif(not STATIC_DB.exists(), reason="store not inges
 def test_fingrid_rule_matches_organiser():
     """Our Fingrid availability rules reproduce the organiser's first_usable_origin_utc exactly."""
     from tools.ingest.fingrid import DATASETS, first_usable
-    obs = store.load_observations([v[0] for k, v in DATASETS.items() if k in (319, 124, 246)])
-    for ds in (319, 124, 246):
+    obs = store.load_observations([v[0] for k, v in DATASETS.items() if k in (319, 124, 375)])
+    for ds in (319, 124, 375):
         sid, _, rule = DATASETS[ds]
         g = obs[obs["series_id"] == sid]
-        ours = first_usable(g["timestamp_utc"], rule, pd.Timedelta(minutes=15))
+        ours = first_usable(g["timestamp_utc"] + pd.Timedelta(minutes=15), rule)
         assert (ours.to_numpy() == g["first_usable_origin_utc"].to_numpy()).all(), sid
+
+
+def test_fingrid_refuses_forecasts_and_aggregates():
+    from tools.ingest import fingrid
+    with pytest.raises(ValueError, match="forecast"):
+        fingrid.run([246], "2026-10-01", "2026-10-02")      # refused before any network or key access
+    t = pd.date_range("2026-10-01T00:00Z", periods=10, freq="3min")
+    df = pd.DataFrame({"timestamp_utc": t, "end": t + pd.Timedelta(minutes=3), "value": np.arange(10.0)})
+    q = fingrid.to_quarter_hours(df)
+    assert len(q) == 2 and q["value"].tolist() == [2.0, 7.0]
+    df2 = df.drop(index=7)                               # incomplete second quarter-hour is dropped
+    assert len(fingrid.to_quarter_hours(df2)) == 1
+    h = pd.date_range("2026-10-01T00:00Z", periods=2, freq="h")
+    hq = fingrid.to_quarter_hours(pd.DataFrame({"timestamp_utc": h, "end": h + pd.Timedelta(hours=1), "value": [1.0, 2.0]}))
+    assert len(hq) == 8 and (hq["period_end"].iloc[:4] == h[0] + pd.Timedelta(hours=1)).all()
+    fu = fingrid.first_usable(hq["period_end"].reset_index(drop=True), ("lag", 60))
+    assert (fu.iloc[:4] == pd.Timestamp("2026-10-01T02:00Z")).all()
 
 
 @needs_store
@@ -74,7 +91,7 @@ def test_openmeteo_parse(monkeypatch):
 
     df = openmeteo.fetch_run(Fake(), "ecmwf_ifs", pd.Timestamp("2026-10-01T00:00Z"), sites)
     assert set(df["location_id"]) == {"a", "b"}
-    assert (df["first_usable_origin_utc"] == pd.Timestamp("2026-10-01T07:00Z")).all()
+    assert (df["first_usable_origin_utc"] == pd.Timestamp("2026-10-01T08:00Z")).all()
     assert (df["first_usable_origin_utc"] > df["run_init_utc"]).all()
 
 

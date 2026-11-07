@@ -1,13 +1,19 @@
-"""Fingrid Open Data API ingest (needs FINGRID_API_KEY in the environment or a .env file).
+"""Fingrid Open Data API ingest (needs FINGRID_API_KEY in the environment or the gitignored .env).
+
+Only MEASURED / realised datasets are allowed here. Forecast datasets (e.g. 165, 245, 246, 247) are
+refused: the API keeps only the latest version of a revised forecast, which the rules forbid for
+backtesting (AGENTS.md rule 4). Their vintaged versions come from the starter package.
 
 Two uses:
-- New series not in the starter package (e.g. 75 wind generation), with a conservative
-  publication-delay rule, under new series_ids.
+- New series not in the starter package (e.g. 75 actual wind generation), under new series_ids, with
+  a documented conservative availability rule.
 - Extending package series past the package end for the live mode. Existing (organiser) rows are
   never overwritten: the store inserts with ON CONFLICT DO NOTHING.
 
-first_usable_origin_utc follows the organiser's rules (availability.csv) where the dataset is in the
-package, else the conservative default below.
+Quarter-hour format (AGENTS.md rule 3): data finer than 15 min (3-min real-time series) is averaged
+into quarter-hours, keeping only complete quarter-hours (missing stays missing); first usable origin
+counts from the END of the quarter-hour. Hourly data is repeated for its four quarter-hours, counted
+from the end of the hour.
 """
 from __future__ import annotations
 
@@ -23,9 +29,9 @@ from tools.ingest.http import Client
 URL = "https://data.fingrid.fi/api/datasets/{id}/data"
 
 # dataset_id: (series_id, unit, availability rule)
-# rule ("lag", minutes after period end) or ("daily", day offset, "HH:MM" Europe/Helsinki)
+# rule ("lag", minutes after the END of the quarter-hour, then next full hour)
 DATASETS = {
-    # in the starter package (same series_id, same organiser rules)
+    # in the starter package (same series_id, the organiser's rules; only extended past the package end)
     319: ("fi_imbalance_price", "EUR/MWh", ("lag", 60)),
     244: ("fi_mfrr_up_price", "EUR/MWh", ("lag", 60)),
     106: ("fi_mfrr_down_price", "EUR/MWh", ("lag", 60)),
@@ -34,14 +40,13 @@ DATASETS = {
     369: ("fi_mfrr_direction", "-1/0/1", ("lag", 60)),
     124: ("fi_consumption", "MWh/h", ("lag", 30)),
     74: ("fi_production", "MWh/h", ("lag", 30)),
-    165: ("fi_consumption_fc_da", "MW", ("daily", -1, "13:00")),
-    246: ("fi_wind_fc_da", "MWh/h", ("daily", -1, "13:00")),
-    247: ("fi_solar_fc_da", "MWh/h", ("daily", -1, "13:00")),
-    # new series (not in the package): conservative 60 min lag after period end
-    75: ("fi_wind_production", "MWh/h", ("lag", 60)),
-    188: ("fi_nuclear_production_rt", "MW", ("lag", 60)),
-    198: ("fi_surplus_deficit_rt", "MW", ("lag", 60)),
+    # new measured series (not in the package): conservative 60 min after the quarter-hour ends
+    75: ("fi_wind_production", "MWh/h", ("lag", 60)),          # wind power generation, 15 min
+    188: ("fi_nuclear_production_rt", "MW", ("lag", 60)),     # nuclear real-time, 3 min -> 15 min mean
+    191: ("fi_hydro_production_rt", "MW", ("lag", 60)),       # hydro real-time, 3 min -> 15 min mean
 }
+FORECAST_DATASETS = {165, 166, 245, 246, 247, 248, 241, 242}   # never via the API (latest version only)
+PACKAGE_SERIES = {319, 244, 106, 375, 376, 369, 124, 74}
 
 
 def api_key() -> str:
@@ -56,18 +61,40 @@ def api_key() -> str:
     return key
 
 
-def first_usable(ts: pd.Series, rule: tuple, period: pd.Timedelta) -> pd.Series:
-    if rule[0] == "lag":
-        return (ts + period + pd.Timedelta(minutes=rule[1])).dt.ceil("h")
-    _, day_offset, hhmm = rule
-    local_day = ts.dt.tz_convert("Europe/Helsinki").dt.normalize()
-    pub = (local_day + pd.Timedelta(days=day_offset) + pd.Timedelta(hours=int(hhmm[:2]), minutes=int(hhmm[3:])))
-    return pub.dt.tz_convert("UTC").dt.ceil("h")
+def first_usable(period_end: pd.Series, rule: tuple) -> pd.Series:
+    """First full-hour origin at or after the source period's end plus the publication lag."""
+    return (period_end + pd.Timedelta(minutes=rule[1])).dt.ceil("h")
+
+
+def to_quarter_hours(df: pd.DataFrame) -> pd.DataFrame:
+    """Source rows (timestamp_utc = period start, end, value) -> one row per quarter-hour with the end
+    of the SOURCE period it came from (used for availability)."""
+    period = (df["end"] - df["timestamp_utc"]).median()
+    q = pd.Timedelta(minutes=15)
+    if period == q:
+        return pd.DataFrame({"timestamp_utc": df["timestamp_utc"], "value": df["value"], "period_end": df["end"]})
+    if period < q:
+        need = int(q / period)
+        g = df.assign(qh=df["timestamp_utc"].dt.floor("15min")).groupby("qh")["value"].agg(["mean", "count"])
+        g = g[g["count"] == need]                        # complete quarter-hours only; missing stays missing
+        return pd.DataFrame({"timestamp_utc": g.index, "value": g["mean"].to_numpy(), "period_end": g.index + q})
+    if period == pd.Timedelta(hours=1):                  # repeat for the four quarter-hours (AGENTS.md rule 3)
+        parts = [pd.DataFrame({"timestamp_utc": df["timestamp_utc"] + k * q, "value": df["value"],
+                               "period_end": df["end"]}) for k in range(4)]
+        return pd.concat(parts).sort_values("timestamp_utc")
+    raise ValueError(f"unsupported resolution {period}")
 
 
 def run(datasets: list[int], start: str, end: str) -> None:
+    bad = sorted(set(datasets) & FORECAST_DATASETS)
+    if bad:
+        raise ValueError(f"datasets {bad} are forecasts: the API keeps only their latest version, which the "
+                         "rules forbid for backtesting (AGENTS.md rule 4)")
     client = Client(min_interval_s=2.1, headers={"x-api-key": api_key()})   # Fingrid: 1 call per 2 s
     for ds in datasets:
+        if ds in FORECAST_DATASETS:
+            raise ValueError(f"dataset {ds} is a forecast: the API keeps only its latest version, which the "
+                             "rules forbid for backtesting (AGENTS.md rule 4)")
         if ds not in DATASETS:
             raise ValueError(f"dataset {ds} not configured in tools/ingest/fingrid.py DATASETS")
         sid, unit, rule = DATASETS[ds]
@@ -88,15 +115,18 @@ def run(datasets: list[int], start: str, end: str) -> None:
             continue
         df = pd.DataFrame(rows)
         df["timestamp_utc"] = pd.to_datetime(df["startTime"], utc=True)
-        period = (pd.to_datetime(df["endTime"], utc=True) - df["timestamp_utc"]).median()
-        out = pd.DataFrame({
-            "series_id": sid, "source": "fingrid", "dataset_id": str(ds), "timestamp_utc": df["timestamp_utc"],
-            "value": pd.to_numeric(df["value"], errors="coerce"), "unit": unit,
-        }).drop_duplicates(["series_id", "timestamp_utc"])
-        out["first_usable_origin_utc"] = first_usable(out["timestamp_utc"], rule, period)
+        df["end"] = pd.to_datetime(df["endTime"], utc=True)
+        df["value"] = pd.to_numeric(df["value"], errors="coerce")
+        df = df.dropna(subset=["value"]).drop_duplicates("timestamp_utc").sort_values("timestamp_utc")
+        qh = to_quarter_hours(df)
+        out = pd.DataFrame({"series_id": sid, "source": "fingrid", "dataset_id": str(ds),
+                            "timestamp_utc": pd.to_datetime(qh["timestamp_utc"], utc=True).to_numpy(),
+                            "value": qh["value"].to_numpy(), "unit": unit})
+        out["timestamp_utc"] = pd.to_datetime(out["timestamp_utc"], utc=True)
+        out["first_usable_origin_utc"] = first_usable(pd.to_datetime(qh["period_end"], utc=True).reset_index(drop=True), rule).to_numpy()
         n = store.insert_observations(out, batch=f"fingrid:{ds}")
         print(f"{ds} {sid}: {len(out)} rows fetched, {n} new (existing rows kept unchanged)")
-        if ds not in (319, 244, 106, 375, 376, 369, 124, 74, 165, 246, 247):
+        if ds not in PACKAGE_SERIES:
             store.upsert_catalog(pd.DataFrame([{
                 "series_id": sid, "source": "fingrid", "dataset_id": str(ds), "unit": unit, "kind": "observation",
                 "availability_rule": f"{rule} (conservative, ours)", "licence": "CC BY 4.0 (Fingrid Open Data)",

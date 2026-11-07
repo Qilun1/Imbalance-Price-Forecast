@@ -10,6 +10,7 @@ Commands
   ingest fingrid --datasets 75,188 --start D --end D    Fingrid API (needs FINGRID_API_KEY)
   status                        what is in the store and in infer_data
   drop-runs --source open-meteo delete our stored NWP runs of a source (e.g. before a re-pull)
+  nwp-delay [--model ecmwf_ifs] measured Open-Meteo publication delay vs the delay we assume
   features [--set v1]           (re)build the cached feature table
   train --config FILE --mode val|final
   infer --model NAME --period val|test|all
@@ -75,6 +76,16 @@ def cmd_status(a):
 def cmd_drop_runs(a):
     n = store.drop_forecast_runs(a.source)
     print(f"deleted {n} forecast_runs rows of source {a.source!r}")
+
+
+def cmd_nwp_delay(a):
+    from tools.ingest.openmeteo import MODELS, measure_delay
+    measured = measure_delay(a.model)
+    assumed = MODELS[a.model][0]
+    margin = assumed - measured - pd.Timedelta(minutes=10)
+    print(f"{a.model}: measured {measured}, + 10 min Open-Meteo advice, assumed {assumed}, margin {margin}")
+    if margin < pd.Timedelta(minutes=30):
+        sys.exit("margin below 30 min: raise the delay in tools/ingest/openmeteo.py MODELS (AGENTS.md rule 4)")
 
 
 def cmd_features(a):
@@ -203,6 +214,7 @@ def main(argv=None):
     s.add_argument("--no-cache", action="store_true", help="openmeteo: do not keep raw JSON")
     s.set_defaults(f=cmd_ingest)
     sub.add_parser("status").set_defaults(f=cmd_status)
+    s = sub.add_parser("nwp-delay"); s.add_argument("--model", default="ecmwf_ifs"); s.set_defaults(f=cmd_nwp_delay)
     s = sub.add_parser("drop-runs"); s.add_argument("--source", required=True, choices=["open-meteo"])
     s.set_defaults(f=cmd_drop_runs)
     s = sub.add_parser("features"); s.add_argument("--set", default="v1"); s.set_defaults(f=cmd_features)

@@ -19,11 +19,25 @@ from tools.ingest.http import Budget, Client, DailyLimit
 from tools.ingest.windsites import load_sites
 
 URL = "https://single-runs-api.open-meteo.com/v1/forecast"
+# Publication delay per model = run init -> first moment the run may be used, BEFORE rounding up to
+# the next full hour. Must be conservative (AGENTS.md rule 4).
+# ecmwf_ifs: measured 7 Nov 2026 from Open-Meteo's metadata endpoint
+#   (https://api.open-meteo.com/data/ecmwf_ifs/static/meta.json): last_run_availability_time -
+#   last_run_initialisation_time = 24,491 s = 6 h 48 min; Open-Meteo advises waiting a further 10 min.
+#   -> 6 h 58 min. We use 8 h (about 1 h margin). Re-check with `tools.cli nwp-delay`.
+# metno_nordic: NOT measured; do not use until `tools.cli nwp-delay --model metno_nordic` is checked.
 MODELS = {
     # model id: (publication delay, run hours UTC)
-    "ecmwf_ifs": (pd.Timedelta(hours=7), (0, 6, 12, 18)),
-    "metno_nordic": (pd.Timedelta(hours=3), (0, 6, 12, 18)),
+    "ecmwf_ifs": (pd.Timedelta(hours=8), (0, 6, 12, 18)),
+    "metno_nordic": (pd.Timedelta(hours=4), (0, 6, 12, 18)),
 }
+META_URL = "https://api.open-meteo.com/data/{model}/static/meta.json"
+
+
+def measure_delay(model: str = "ecmwf_ifs") -> pd.Timedelta:
+    """Delay of the latest run as reported by Open-Meteo (availability - initialisation)."""
+    m = Client(min_interval_s=1.0).get_json(META_URL.format(model=model))
+    return pd.Timedelta(seconds=m["last_run_availability_time"] - m["last_run_initialisation_time"])
 DEFAULT_MODELS = ["ecmwf_ifs"]   # free tier: ~10 sites x 620 runs = ~6,200 calls, inside 10,000/day
 # Open-Meteo free tier: 600/min, 5,000/h, 10,000/day; every location counts as one call. Stay below.
 FREE_BUDGET = dict(per_minute=500, per_hour=4500, per_day=9500)
