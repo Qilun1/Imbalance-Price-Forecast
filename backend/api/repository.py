@@ -168,13 +168,15 @@ class Repository:
 
 
 def _low_skill_events(model: str) -> frozenset[str]:
-    """Events whose validation Brier skill was below the bundle's bar (meta.json); none if unknown."""
+    """Events hidden from /notes by default (meta.json): validation Brier skill below the bundle's bar,
+    or listed in its hidden_events; none if unknown."""
     path = ARTIFACTS_DIR / model / "meta.json"
     if not path.exists():
         return frozenset()
     meta = json.loads(path.read_text())
     bar = meta.get("low_skill_bss", 0.0)
-    return frozenset(e for e, bss in meta.get("validation_bss", {}).items() if bss is not None and bss < bar)
+    weak = {e for e, bss in meta.get("validation_bss", {}).items() if bss is not None and bss < bar}
+    return frozenset(weak | set(meta.get("hidden_events", [])))
 
 
 @lru_cache

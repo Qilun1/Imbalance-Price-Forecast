@@ -35,21 +35,33 @@ from .paths import ARTIFACTS_DIR
 
 LEVELS = (0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95)
 GRID = np.linspace(0.005, 0.995, 100)          # quantile levels used to sample each conditional
+ASINH_SCALE = 50.0                              # EUR/MWh; asinh(y / scale) target option for the quantile heads
 
 
 def _key(side: str, block: int, q: float) -> str:
     return f"{side}_b{block}_q{int(round(q * 100)):02d}"
 
 
-def _quantile_fn(knots: np.ndarray, levels=LEVELS, grid=GRID) -> np.ndarray:
+def _quantile_fn(knots: np.ndarray, levels=LEVELS, grid=GRID, tail: str = "linear") -> np.ndarray:
     """Conditional quantile function on GRID from sorted knots (n x len(levels)): linear between
-    knots, linear extrapolation of the outer segments into the tails."""
+    knots. Outside the outer knots: tail="linear" extrapolates the outer segments (bounded, light
+    tails); tail="exp" continues each tail exponentially (Laplace-like), with the scale taken from the
+    outer segment, so the 0.5 % and 99.5 % quantiles sit about 3.3 outer-segment widths beyond the
+    outer knots instead of 0.9. The spread is heavy-tailed (prices to +-5000 EUR/MWh), and the outer
+    knots are only the 5 % and 95 % conditional quantiles."""
     lv = np.asarray(levels)
     out = np.empty((knots.shape[0], len(grid)))
+    lo_scale = (knots[:, 1] - knots[:, 0]) / np.log(lv[1] / lv[0])
+    hi_scale = (knots[:, -1] - knots[:, -2]) / np.log((1 - lv[-2]) / (1 - lv[-1]))
     for j, u in enumerate(grid):
-        k = np.clip(np.searchsorted(lv, u) - 1, 0, len(lv) - 2)
-        w = (u - lv[k]) / (lv[k + 1] - lv[k])
-        out[:, j] = knots[:, k] + w * (knots[:, k + 1] - knots[:, k])
+        if tail == "exp" and u < lv[0]:
+            out[:, j] = knots[:, 0] - lo_scale * np.log(lv[0] / u)
+        elif tail == "exp" and u > lv[-1]:
+            out[:, j] = knots[:, -1] + hi_scale * np.log((1 - lv[-1]) / (1 - u))
+        else:
+            k = np.clip(np.searchsorted(lv, u) - 1, 0, len(lv) - 2)
+            w = (u - lv[k]) / (lv[k + 1] - lv[k])
+            out[:, j] = knots[:, k] + w * (knots[:, k + 1] - knots[:, k])
     return out
 
 
@@ -88,6 +100,12 @@ class MixBundle:
         cols = [c for c in cols if c not in set(config.get("drop_features", []))]
         reg = {**DEFAULT_REG, **config.get("regressor", {})}
         clf = {**DEFAULT_CLF, **config.get("classifier", {})}
+        if config.get("seed") is not None:                  # bagging member: different row/column subsamples
+            reg["random_state"] = clf["random_state"] = int(config["seed"])
+        if config.get("train_start"):                       # bagging member: shorter (more recent) window
+            df = df[df["delivery_start_utc"] >= pd.Timestamp(config["train_start"], tz="UTC")]
+        tf = config.get("target_transform", "none")        # "asinh": quantile heads fit asinh(y / ASINH_SCALE)
+        y_q = np.arcsinh(df["y_spread"] / ASINH_SCALE) if tf == "asinh" else df["y_spread"]
         b = cls(name=name, features=cols)
         X = df[cols]
         b.boosters["up"] = lgb.LGBMClassifier(**clf).fit(X, (df["y_dir"] == 1).astype(int)).booster_
@@ -100,12 +118,14 @@ class MixBundle:
                 rows = df[in_block & mask]
                 counts[f"{side}_b{bi}"] = int(len(rows))
                 for q in LEVELS:
-                    m = lgb.LGBMRegressor(objective="quantile", alpha=q, **reg).fit(rows[cols], rows["y_spread"])
+                    m = lgb.LGBMRegressor(objective="quantile", alpha=q, **reg).fit(rows[cols], y_q.loc[rows.index])
                     b.boosters[_key(side, bi, q)] = m.booster_
         b.meta = {
             "name": name, "kind": "mixture", "feature_set": config.get("feature_set", "v1"),
             "blocks": cls.blocks(config), "spikes": config.get("spikes", "mixture"),
             "widen": float(config.get("widen", 1.0)),
+            "widen_mode": config.get("widen_mode", "marginal"), "tail": config.get("tail", "linear"),
+            "target_transform": tf, "seed": config.get("seed"), "train_start": config.get("train_start"),
             "p_none": float(np.clip((df["y_dir"] == 0).mean(), 0.001, 0.05)),
             "train_rows": int(len(df)), "rows_per_head": counts,
             "train_last_delivery_utc": df["delivery_start_utc"].max().strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -123,21 +143,36 @@ class MixBundle:
         p_up = (1 - p_none) * self.boosters["up"].predict(X)
         p_down = 1 - p_none - p_up
         v_up, v_dn = np.full((n, len(GRID)), np.nan), np.full((n, len(GRID)), np.nan)
+        v_up0, v_dn0 = np.full((n, len(GRID)), np.nan), np.full((n, len(GRID)), np.nan)
         step = df["step"].to_numpy()
-        for bi, (s0, s1) in enumerate(self.meta["blocks"]):
-            m = (step >= s0) & (step <= s1)
+        w = float(self.meta.get("widen", 1.0))
+        widen_mode = self.meta.get("widen_mode", "marginal")   # "marginal": scale p10/p90 around p50 after
+        tail = self.meta.get("tail", "linear")                  # mixing; "component": scale each conditional
+        for bi, (s0, s1) in enumerate(self.meta["blocks"]):     # head around its median before mixing, so
+            m = (step >= s0) & (step <= s1)                      # bands and spike probabilities stay consistent
             if not m.any():
                 continue
-            for side, target in (("up", v_up), ("down", v_dn)):
+            for side, target, raw in (("up", v_up, v_up0), ("down", v_dn, v_dn0)):
                 knots = np.sort(np.column_stack([self.boosters[_key(side, bi, q)].predict(X[m]) for q in LEVELS]), axis=1)
-                target[m] = _quantile_fn(knots)
+                if self.meta.get("target_transform", "none") == "asinh":   # quantiles are equivariant
+                    knots = np.sinh(knots) * ASINH_SCALE
+                raw[m] = _quantile_fn(knots, tail=tail)
+                if widen_mode.startswith("component") and w != 1.0:
+                    med = knots[:, [LEVELS.index(0.5)]]
+                    knots = med + w * (knots - med)
+                target[m] = _quantile_fn(knots, tail=tail)
         vals, cw = mixture(p_up, p_down, np.full(n, p_none), v_up, v_dn)
         q10, q50, q90 = (mixture_quantile(vals, cw, t) for t in (0.1, 0.5, 0.9))
-        w = self.meta.get("widen", 1.0)
+        if widen_mode == "component50":                 # p50 from the unwidened mixture (MAE), bands
+            vals0, cw0 = mixture(p_up, p_down, np.full(n, p_none), v_up0, v_dn0)   # and spikes widened
+            q50 = mixture_quantile(vals0, cw0, 0.5)
+            q10, q90 = np.minimum(q10, q50), np.maximum(q90, q50)
+        elif widen_mode != "component":
+            q10, q90 = q50 - w * (q50 - q10), q50 + w * (q90 - q50)
         out = pd.DataFrame(index=df.index)
-        out["p10"] = spot + q50 - w * (q50 - q10)
+        out["p10"] = spot + q10
         out["p50"] = spot + q50
-        out["p90"] = spot + q50 + w * (q90 - q50)
+        out["p90"] = spot + q90
         out["p_up"], out["p_none"] = p_up, p_none
         out["p_down"] = 1 - out["p_up"] - out["p_none"]
         # spike probabilities: from the mixture, from the dedicated classifiers, or their mean

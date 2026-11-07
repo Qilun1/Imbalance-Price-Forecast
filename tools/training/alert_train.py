@@ -190,7 +190,8 @@ def train(variant: str) -> AlertBundle:
     bundle = AlertBundle.train(name, table, input_columns(table), cfg["families"], label_columns(variant),
                                extra_meta={"variant": variant, "base_model": cfg["base_model"],
                                            "challenger_model": cfg["challenger_model"],
-                                           "validation_bss": skill, "low_skill_bss": cfg["low_skill_bss"]})
+                                           "validation_bss": skill, "low_skill_bss": cfg["low_skill_bss"],
+                                           "hidden_events": cfg.get("hidden_events", [])})
     print(f"saved {bundle.save()}")
     return bundle
 

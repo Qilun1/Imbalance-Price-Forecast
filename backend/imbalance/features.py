@@ -16,9 +16,10 @@ from . import store as db
 from .contract import HORIZON_STEPS as HORIZON, SPIKE_MARGIN, STEP  # noqa: F401
 
 FEATURE_SET = "v1"                 # default feature set
-FEATURE_SETS = ("v1", "v2", "v2p", "v3", "v4", "v4m", "v5", "v5m", "v6", "v6m", "v7", "v7m", "v8", "v8m", "v9", "v9m")   # v2+ = v1 + vintaged NWP proxies; model per set in nwp.NWP_SPECS
-WIND_OBS_SETS = {"v4", "v4m", "v5", "v5m", "v6", "v6m", "v7", "v7m", "v8", "v8m", "v9", "v9m"}
-GRID_SETS = {"v9", "v9m"}         # + fresh grid state at the origin (Fingrid real-time, 15 min rule)
+FEATURE_SETS = ("v1", "v2", "v2p", "v3", "v4", "v4m", "v5", "v5m", "v6", "v6m", "v7", "v7m", "v8", "v8m", "v9", "v9m", "v10", "v10m")   # v2+ = v1 + vintaged NWP proxies; model per set in nwp.NWP_SPECS
+WIND_OBS_SETS = {"v4", "v4m", "v5", "v5m", "v6", "v6m", "v7", "v7m", "v8", "v8m", "v9", "v9m", "v10", "v10m"}
+GRID_SETS = {"v9", "v9m", "v10", "v10m"}   # + fresh grid state at the origin (Fingrid real-time, 15 min rule)
+PERSIST_SETS = {"v10", "v10m"}    # + spike clustering and 24 h direction history at the origin (add_persistence)
 UMM_SETS = {"v8", "v8m"}          # + Nord Pool UMM outage messages, each version from its publication time
 SYSTEM_SETS = {"v7", "v7m"}       # + system stress: nuclear / hydro (Fingrid 188 / 191) and import-link saturation     # + observed wind error vs Fingrid day-ahead forecast (Fingrid 75 vs 246)
 HIST_SETS = {"v5", "v5m"}         # + out-of-sample long-history direction head (tools/training/hist_heads.py)
@@ -90,7 +91,8 @@ def lag_window(store: Store, sid: str, last: np.ndarray, o: np.ndarray, k: int) 
 
 def build(store: Store, origins: pd.DatetimeIndex, with_targets: bool, nwp: tuple | None = None,
           wind_obs: bool = False, hist: pd.DataFrame | None = None, nwp2=None,
-          system: bool = False, umm: pd.DataFrame | None = None, grid: bool = False) -> pd.DataFrame:
+          system: bool = False, umm: pd.DataFrame | None = None, grid: bool = False,
+          persist: bool = False) -> pd.DataFrame:
     """Feature rows for (origin, step). nwp = (wind RunTable, temp RunTable) adds the v2 weather columns;
     wind_obs adds the observed wind-error columns (v4)."""
     import warnings
@@ -109,6 +111,8 @@ def build(store: Store, origins: pd.DatetimeIndex, with_targets: bool, nwp: tupl
             df = add_system_state(df, store)
         if grid:
             df = add_grid_state(df, store)
+        if persist:
+            df = add_persistence(df, store)
         if umm is not None:
             from .umm import add_umm
             df = add_umm(df, umm)
@@ -290,6 +294,41 @@ def add_grid_state(df: pd.DataFrame, store: Store) -> pd.DataFrame:
     for c in cuts:
         cut = np.maximum(cut, pd.Series(c, index=origins).reindex(o_key).to_numpy())
     out["data_cutoff_utc"] = pd.to_datetime(np.minimum(cut, o_key.asi8), utc=True)
+    return out
+
+
+def add_persistence(df: pd.DataFrame, store: Store) -> pd.DataFrame:
+    """v10: spike clustering and longer direction history at the origin. Spikes cluster in time
+    (scarcity episodes last hours) and the direction has a daily base rate that the 4 h windows of the
+    v1 features miss. From the same 60 min lag group as the price features (fi_imbalance_price,
+    fi_spot_price, fi_mfrr_direction), so data_cutoff_utc is unchanged:
+    - share of spike quarter-hours (|imbalance - spot| > 50) in the last 4 / 12 / 24 h, high and low
+      separately for 12 h;
+    - quarter-hours since the last spike (96 = none in the last 24 h);
+    - mean direction and mean absolute spread over the last 24 h."""
+    out = df.copy()
+    origins = pd.DatetimeIndex(df["forecast_origin_utc"].unique()).as_unit("ns")
+    o_ns = origins.asi8
+    li = store.latest_index("fi_imbalance_price", o_ns)
+    spr = lag_window(store, "fi_imbalance_price", li, o_ns, 96) - lag_window(store, "fi_spot_price", li, o_ns, 96)
+    hi, lo = spr > 50.0, spr < -50.0
+    spike = hi | lo
+    feats = {
+        "spike_share4h": np.nanmean(np.where(np.isnan(spr[:, :16]), np.nan, spike[:, :16]), axis=1),
+        "spike_share12h": np.nanmean(np.where(np.isnan(spr[:, :48]), np.nan, spike[:, :48]), axis=1),
+        "spike_share24h": np.nanmean(np.where(np.isnan(spr), np.nan, spike), axis=1),
+        "spike_hi_share12h": np.nanmean(np.where(np.isnan(spr[:, :48]), np.nan, hi[:, :48]), axis=1),
+        "spike_lo_share12h": np.nanmean(np.where(np.isnan(spr[:, :48]), np.nan, lo[:, :48]), axis=1),
+        "qh_since_spike": np.where(spike.any(axis=1), np.argmax(spike, axis=1), 96).astype(float),
+        "spread_absmean24h": np.nanmean(np.abs(spr), axis=1),
+    }
+    d = lag_window(store, "fi_mfrr_direction", store.latest_index("fi_mfrr_direction", o_ns), o_ns, 96)
+    feats["dir_mean24h"] = np.nanmean(d, axis=1)
+    feats["dir_up_share24h"] = np.nanmean(np.where(np.isnan(d), np.nan, d == 1), axis=1)
+    per_origin = pd.DataFrame(feats, index=origins)
+    rows = per_origin.reindex(pd.DatetimeIndex(df["forecast_origin_utc"]).as_unit("ns"))
+    for c in per_origin.columns:
+        out[c] = rows[c].to_numpy()
     return out
 
 
@@ -503,4 +542,4 @@ def build_table(origins: pd.DatetimeIndex | None = None, with_targets: bool = Tr
                  wind_obs=feature_set in WIND_OBS_SETS,
                  hist=load_hist() if feature_set in HIST_SETS else None, nwp2=nwp2,
                  system=feature_set in SYSTEM_SETS, umm=_umm_for(feature_set),
-                 grid=feature_set in GRID_SETS)
+                 grid=feature_set in GRID_SETS, persist=feature_set in PERSIST_SETS)

@@ -134,3 +134,12 @@ def test_real_notes_use_the_out_of_sample_bundle_for_validation(real_client):
     test = real_client.get("/api/notes", params={"persona": "trader", "as_of": TEST_FIRST_ORIGIN.isoformat()}).json()
     assert val["model"] == "alerts-val" and test["model"] == "alerts"
     assert val["notes"] and test["notes"]
+
+
+@needs_real
+def test_real_notes_hide_forecast_miss_unless_asked(real_client):
+    params = {"persona": "trader", "as_of": TEST_FIRST_ORIGIN.isoformat()}
+    hidden = real_client.get("/api/notes", params=params).json()
+    shown = real_client.get("/api/notes", params={**params, "include_low_skill": True}).json()
+    assert "forecast_miss" not in {n["event"] for n in hidden["notes"]}
+    assert any(n["event"] == "forecast_miss" and n["low_skill"] for n in shown["notes"])

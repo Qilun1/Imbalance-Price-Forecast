@@ -17,8 +17,8 @@ const SEVERITY = { spike_high: "hi", extreme_price: "hi", forecast_miss: "hi", s
                    deep_negative: "lo", large_down_activation: "lo" };
 const CONFIDENCE_TEXT = {
   high: "the inputs are fresh, the models agree and many similar past cases back it up",
-  medium: "either the calibration range is wider than usual or the price models disagree",
-  low: "the data is stale or there were few similar past cases, so treat it as a hint",
+  medium: "either the calibration range is wider than usual or the price models disagree, so the percentage is less exact",
+  low: "the data is stale or there were few similar past cases, so the percentage is rough; in past cases like this the event happened more often than it said",
 };
 
 const state = { meta: null, asOf: null, origin: null, forecast: null, actuals: null, notes: [],

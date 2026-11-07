@@ -194,6 +194,28 @@ are data, AGENTS.md rule 0). In short:
   score regions. The confidence-tier bars were read from validation origins only.
 - TabPFN was not tried: TabPFN-2.5+ weights are non-commercial. The TabPFN-2 weights (Apache 2.0 with
   attribution) remain an option, but need PyTorch.
+- `forecast_miss` is hidden from `/notes` by default (team decision, 7 Nov 2026; `hidden_events` in
+  `configs/alerts.yaml`): it predicts misses of the `lgbm_v4s` P50, not of the forecast the dashboard
+  shows. The after-the-fact test diagnostic (`tools/eval/alert_test_report.py`) also showed its skill
+  fading. Its model, calibration and threshold are unchanged, and `include_low_skill=true` still returns it.
+
+## 6c. Do the confidence signals mean anything? (validation only)
+
+`uv run python -m tools.eval.alert_confidence` scores the stored `alerts-val` probabilities on validation
+origins, with errors clustered by day and a day-block bootstrap (results in `static_data/work/alerts/`,
+gitignored). In short:
+- The tier orders calibration error as intended: ECE grows from high to medium to low, each clearly
+  above what chance alone gives on that many rows.
+- "Low" does not mean "little skill". Wide intervals occur where scores are high and training cases are
+  few; those notes have the highest Brier skill. What is shaky is the exact percentage, and it errs
+  low: in the low tier the event happened markedly more often than stated. Every tier under-predicts
+  slightly on validation, a shift between the training months and September.
+- In the backtest the tier rests on interval width alone: data age is constant (75 min) and the base
+  models never differ by 45 EUR/MWh, so the stale and conflict reasons are untested.
+- The Venn–Abers intervals are far narrower than the real uncertainty: the event rate falls inside a
+  bin's mean interval in under a tenth of bins. They measure how many similar training cases exist, not
+  a range for the true probability under the shift between months, and should be read as such. Their
+  width still ranks calibration error (the widest tercile has the largest ECE).
 
 ## 7. Open questions for the team
 

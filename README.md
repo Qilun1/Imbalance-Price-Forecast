@@ -13,7 +13,8 @@ On Windows, from this folder:
 .\start-dashboard.cmd real     # the pipeline's forecasts, see tools/README.md
 ```
 
-Other systems and details: `frontend/README.md`.
+Other systems and details: `frontend/README.md`. Running it on live data instead of the replay:
+[`docs/LIVE_DEPLOYMENT.md`](docs/LIVE_DEPLOYMENT.md) (not switched on yet).
 
 ## Repository layout
 
@@ -31,7 +32,7 @@ Other systems and details: `frontend/README.md`.
 | `tools/training/` | Model training and configs |
 | `tools/eval/` | Scoring, submission export, single runs, leakage checks, debugging |
 | `tools/starter_package/` | The organiser's starter package, **unchanged** (no data files) |
-| `docs/` | Evaluation report, data sources and licences, slides |
+| `docs/` | Evaluation report, data sources and licences, live deployment plan, slides |
 
 ## Ground rules
 
@@ -111,19 +112,47 @@ uv run python -m tools.training.mixture_pipeline --config tools/training/configs
 uv run python -m tools.training.mixture_pipeline --config tools/training/configs/mix_v4mb.yaml
 uv run python -m tools.training.mixture_pipeline --config tools/training/configs/mix_v9b.yaml
 uv run python -m tools.training.mixture_pipeline --config tools/training/configs/mix_v9mb.yaml
-# 3. Lead-time split (v9 members for steps 1-8), average, then the validation-fitted spike shift and band widths
+# 3. Bagging members per config (default fit re-read with the consistent mixture settings = s0; seed 1;
+#    seed 2 on the last 7 weeks before the cutoff; seed 3 with asinh target). One run per member.
+for C in mix_v4b mix_v4mb mix_v9b mix_v9mb; do for P in val test; do S=$([ $P = val ] && echo -val); \
+  M=$([ $P = val ] && echo val || echo final); W=$([ $P = val ] && echo 2026-07-20 || echo 2026-08-17); \
+  uv run python -m tools.eval.mix_variants --model $C$S --period $P --widen 2.0 --modes component50 --tails exp; \
+  cp static_data/work/submissions/${C}${S}__w2.00_component50_exp_$P.csv static_data/work/submissions/${C}_s0${S}_$P.csv; \
+  uv run python -m tools.training.bag --config tools/training/configs/$C.yaml --member s1  --mode $M --widen 2.0 --widen-mode component50 --tail exp; \
+  uv run python -m tools.training.bag --config tools/training/configs/$C.yaml --member s2w --mode $M --train-start $W --widen 2.0 --widen-mode component50 --tail exp; \
+  uv run python -m tools.training.bag --config tools/training/configs/$C.yaml --member s3a --mode $M --widen 2.0 --widen-mode component50 --tail exp; done; done
+# 4. Lead-time split per member (v9 for steps 1-8), 8-member average, validation-fitted band widths
+for P in val test; do S=$([ $P = val ] && echo -val); M=""; for V in s0 s1 s2w s3a; do \
+  uv run python -m tools.eval.step_split --name split_v9b_v4b_$V --early mix_v9b_$V$S --late mix_v4b_$V$S --period $P; \
+  uv run python -m tools.eval.step_split --name split_v9mb_v4mb_$V --early mix_v9mb_$V$S --late mix_v4mb_$V$S --period $P; \
+  M="$M split_v9b_v4b_$V split_v9mb_v4mb_$V"; done; \
+  uv run python -m tools.eval.ensemble --name ens_bag8 --members $M --period $P; done
+uv run python -m tools.eval.band_width --model ens_bag8 --apply
+# 5. Previous chain (default members, x1.4 band, spike logit shift, band widths) = ens_mixg_spk_bw
 for P in val test; do S=$([ $P = val ] && echo -val); \
   uv run python -m tools.eval.step_split --name split_v9b_v4b --early mix_v9b$S --late mix_v4b$S --period $P; \
   uv run python -m tools.eval.step_split --name split_v9mb_v4mb --early mix_v9mb$S --late mix_v4mb$S --period $P; \
   uv run python -m tools.eval.ensemble --name ens_mixg --members split_v9b_v4b split_v9mb_v4mb --period $P; done
 uv run python -m tools.eval.spike_shift --model ens_mixg --apply
 uv run python -m tools.eval.band_width --model ens_mixg_spk --apply
+# 6. Spike hedge: spike probabilities averaged 50/50 with the previous chain (ens_mixg_spk_bw)
+for P in val test; do uv run python -m tools.eval.spike_hedge --base ens_bag8_bw --other ens_mixg_spk_bw --name ens_final --period $P; done
 ```
 
-The submission is `static_data/work/submissions/ens_mixg_spk_bw_test.csv` (submit it as
+The submission is `static_data/work/submissions/ens_final_test.csv` (submit it as
 `forecast_backtest.csv`); every step runs the organiser's validator or scorer. More commands:
 `tools/README.md`. Dashboard: `backend/api/README.md` (API, runs on mock data without licensed files)
 and `frontend/README.md`. Data sources and licences: `docs/SOURCES_AND_LICENCES.md`.
+
+## Going live
+
+**The live deployment plan is [`docs/LIVE_DEPLOYMENT.md`](docs/LIVE_DEPLOYMENT.md).** It is not switched
+on: the dashboard replays the backtest, whose forecast times end on 1 Nov 2026. The plan covers, in
+order: access (ENTSO-E token, a licensed live spot price), keeping every source fresh, the hourly
+forecast job, the API and dashboard settings, where it may run under the data licences, and the
+checks before relying on it.
+
+Calling the API from scripts or other apps instead of the dashboard: [`backend/api/README.md`](backend/api/README.md).
 
 ## About the challenge (organiser's notes)
 

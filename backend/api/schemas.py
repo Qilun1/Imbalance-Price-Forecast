@@ -117,7 +117,7 @@ class Note(BaseModel):
     threshold: float                # default or user-set; changing it changes only `fires`
     fires: bool
     confidence: Literal["high", "medium", "low"]
-    low_skill: bool                 # little skill on validation; hidden unless asked for
+    low_skill: bool                 # little skill on validation, or hidden by team decision; hidden unless asked for
     drivers: list[str]              # input families pushing the probability up
     check: str                      # what this persona could check; never an instruction
 

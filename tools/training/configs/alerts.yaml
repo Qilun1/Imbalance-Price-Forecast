@@ -7,6 +7,9 @@ base_model: lgbm_v4s
 challenger_model: lgbm_v4ms
 min_bss_margin: 0.02
 low_skill_bss: 0.05      # events below this validation BSS are hidden from /notes by default
+# Also hidden by default (team decision, 7 Nov 2026): forecast_miss predicts misses of lgbm_v4s's P50,
+# not of the forecast the dashboard shows. Its model, calibration and threshold are unchanged.
+hidden_events: [forecast_miss]
 families:
   spike_high: lgbm
   spike_low: rule

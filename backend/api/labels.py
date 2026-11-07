@@ -134,6 +134,16 @@ LABELS: dict[str, str] = {
     "grid_cons_err_last": "Real-time consumption vs day-ahead forecast, latest",
     "grid_cons_err_mean1h": "Real-time consumption vs day-ahead forecast, last hour",
     "grid_obs_lead_h": "Hours from the latest grid reading to delivery",
+    # v10 persistence features (feature set not adopted; labels kept so any trained v10 model reads well)
+    "spike_share4h": "Share of spike quarter-hours, last 4 h",
+    "spike_share12h": "Share of spike quarter-hours, last 12 h",
+    "spike_share24h": "Share of spike quarter-hours, last 24 h",
+    "spike_hi_share12h": "Share of high-spike quarter-hours, last 12 h",
+    "spike_lo_share12h": "Share of low-spike quarter-hours, last 12 h",
+    "qh_since_spike": "Quarter-hours since the last spike",
+    "spread_absmean24h": "Mean |imbalance - spot|, last 24 h",
+    "dir_mean24h": "Mean regulation direction, last 24 h",
+    "dir_up_share24h": "Share of up-regulated quarter-hours, last 24 h",
 }
 
 

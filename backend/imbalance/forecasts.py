@@ -87,13 +87,18 @@ def _fmt(ts: pd.Series) -> pd.Series:
     return pd.to_datetime(ts, utc=True).dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def export_submission(model: str, template: Path, out: Path, path: Path = INFER_DB) -> Path:
+def export_submission(model: str, template: Path, out: Path, path: Path = INFER_DB,
+                      frame: pd.DataFrame | None = None) -> Path:
     """Write a submission CSV that follows `template` (organiser's) row for row, column for column."""
     tpl = pd.read_csv(template, dtype=str)
     cols = submission_columns()
     assert tpl.columns.tolist() == cols, "template columns differ from the organiser's sample_submission.csv"
     origins = pd.DatetimeIndex(pd.to_datetime(tpl["forecast_origin_utc"].unique(), utc=True))
-    fc = read(model, origins, path)
+    if frame is not None:                       # forecasts passed in directly (no store round trip)
+        fc = frame[frame["forecast_origin_utc"].isin(origins)].copy()
+        fc["model"] = model
+    else:
+        fc = read(model, origins, path)
     if fc.empty:
         raise RuntimeError(f"no forecasts for model {model!r} at the template's origins")
     fc["forecast_origin_utc"] = _fmt(fc["forecast_origin_utc"])
