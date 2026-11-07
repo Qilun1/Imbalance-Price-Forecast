@@ -11,11 +11,13 @@ from pathlib import Path
 from threading import Thread
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.api.repository import OutOfRange, get_repository
 from backend.api.routes import actuals, alerts, forecast, hindsight, meta, notes, performance, umm
+from backend.api.settings import cors_origins
 
 
 @asynccontextmanager
@@ -29,6 +31,10 @@ app = FastAPI(title="Imbalance price forecast API", version="0.1.0", lifespan=li
 
 for module in (meta, forecast, actuals, alerts, notes, performance, hindsight, umm):
     app.include_router(module.router, prefix="/api")
+
+# Browser apps on another origin need CORS; off unless IMBALANCE_CORS_ORIGINS names them. Read-only API.
+if cors_origins():
+    app.add_middleware(CORSMiddleware, allow_origins=cors_origins(), allow_methods=["GET"])
 
 
 # Plain HTML/CSS/JS mockup of the notification chat (mockup/), separate from the React frontend.

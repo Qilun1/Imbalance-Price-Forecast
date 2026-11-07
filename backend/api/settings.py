@@ -13,6 +13,10 @@ IMBALANCE_CHALLENGER_VAL / IMBALANCE_CHALLENGER_TEST
 IMBALANCE_NOTES_VAL / IMBALANCE_NOTES_TEST
                       event classifiers behind /notes, default alerts-val / alerts. "none" turns
                       the notes off for that period.
+IMBALANCE_CORS_ORIGINS
+                      comma-separated browser origins allowed to call the API directly, e.g.
+                      "http://localhost:5173". Empty (default): no CORS headers. The dashboard needs
+                      none, it calls through its own proxy; scripts and curl need none either.
 """
 from __future__ import annotations
 
@@ -77,3 +81,7 @@ def load_settings() -> Settings:
 @lru_cache
 def get_settings() -> Settings:
     return load_settings()
+
+
+def cors_origins() -> list[str]:
+    return [o.strip() for o in os.environ.get("IMBALANCE_CORS_ORIGINS", "").split(",") if o.strip()]
