@@ -117,6 +117,23 @@ LABELS: dict[str, str] = {
     "umm_new_unplanned_mw": "Outage announced in the last 3 hours (UMM)",
     "umm_hours_since_trip": "Hours since the last unplanned outage message (UMM)",
     "hist_p_up": "Up-regulation chance from 1.5 years of history",
+    "grid_surplus_last": "Grid surplus or deficit, latest",
+    "grid_surplus_mean1h": "Grid surplus or deficit, last hour",
+    "grid_surplus_mean4h": "Grid surplus or deficit, last 4 hours",
+    "grid_surplus_trend_1h": "Change in grid surplus or deficit over the hour",
+    "grid_freq_dev_last": "Grid frequency deviation, latest",
+    "grid_freq_dev_mean1h": "Grid frequency deviation, last hour",
+    "grid_net_import_last": "Net import, latest",
+    "grid_net_import_change_1h": "Change in net import over the hour",
+    "grid_eboiler_last": "Electric boiler load, latest",
+    "grid_eboiler_change_1h": "Change in electric boiler load over the hour",
+    "grid_bess_net_last": "Battery net discharge, latest",
+    "grid_bess_net_mean1h": "Battery net discharge, last hour",
+    "grid_wind_err_last": "Real-time wind vs day-ahead forecast, latest",
+    "grid_wind_err_mean1h": "Real-time wind vs day-ahead forecast, last hour",
+    "grid_cons_err_last": "Real-time consumption vs day-ahead forecast, latest",
+    "grid_cons_err_mean1h": "Real-time consumption vs day-ahead forecast, last hour",
+    "grid_obs_lead_h": "Hours from the latest grid reading to delivery",
 }
 
 

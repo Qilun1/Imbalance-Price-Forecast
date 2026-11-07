@@ -16,8 +16,9 @@ from . import store as db
 from .contract import HORIZON_STEPS as HORIZON, SPIKE_MARGIN, STEP  # noqa: F401
 
 FEATURE_SET = "v1"                 # default feature set
-FEATURE_SETS = ("v1", "v2", "v2p", "v3", "v4", "v4m", "v5", "v5m", "v6", "v6m", "v7", "v7m", "v8", "v8m")   # v2+ = v1 + vintaged NWP proxies; model per set in nwp.NWP_SPECS
-WIND_OBS_SETS = {"v4", "v4m", "v5", "v5m", "v6", "v6m", "v7", "v7m", "v8", "v8m"}
+FEATURE_SETS = ("v1", "v2", "v2p", "v3", "v4", "v4m", "v5", "v5m", "v6", "v6m", "v7", "v7m", "v8", "v8m", "v9", "v9m")   # v2+ = v1 + vintaged NWP proxies; model per set in nwp.NWP_SPECS
+WIND_OBS_SETS = {"v4", "v4m", "v5", "v5m", "v6", "v6m", "v7", "v7m", "v8", "v8m", "v9", "v9m"}
+GRID_SETS = {"v9", "v9m"}         # + fresh grid state at the origin (Fingrid real-time, 15 min rule)
 UMM_SETS = {"v8", "v8m"}          # + Nord Pool UMM outage messages, each version from its publication time
 SYSTEM_SETS = {"v7", "v7m"}       # + system stress: nuclear / hydro (Fingrid 188 / 191) and import-link saturation     # + observed wind error vs Fingrid day-ahead forecast (Fingrid 75 vs 246)
 HIST_SETS = {"v5", "v5m"}         # + out-of-sample long-history direction head (tools/training/hist_heads.py)
@@ -89,7 +90,7 @@ def lag_window(store: Store, sid: str, last: np.ndarray, o: np.ndarray, k: int) 
 
 def build(store: Store, origins: pd.DatetimeIndex, with_targets: bool, nwp: tuple | None = None,
           wind_obs: bool = False, hist: pd.DataFrame | None = None, nwp2=None,
-          system: bool = False, umm: pd.DataFrame | None = None) -> pd.DataFrame:
+          system: bool = False, umm: pd.DataFrame | None = None, grid: bool = False) -> pd.DataFrame:
     """Feature rows for (origin, step). nwp = (wind RunTable, temp RunTable) adds the v2 weather columns;
     wind_obs adds the observed wind-error columns (v4)."""
     import warnings
@@ -106,6 +107,8 @@ def build(store: Store, origins: pd.DatetimeIndex, with_targets: bool, nwp: tupl
             df = add_hist(df, hist)
         if system:
             df = add_system_state(df, store)
+        if grid:
+            df = add_grid_state(df, store)
         if umm is not None:
             from .umm import add_umm
             df = add_umm(df, umm)
@@ -217,6 +220,72 @@ def add_system_state(df: pd.DataFrame, store: Store) -> pd.DataFrame:
     rows = per_origin.reindex(o_key)
     for c in per_origin.columns:
         out[c] = rows[c].to_numpy()
+    cut = df["data_cutoff_utc"].dt.as_unit("ns").astype("int64").to_numpy()
+    for c in cuts:
+        cut = np.maximum(cut, pd.Series(c, index=origins).reindex(o_key).to_numpy())
+    out["data_cutoff_utc"] = pd.to_datetime(np.minimum(cut, o_key.asi8), utc=True)
+    return out
+
+
+def add_grid_state(df: pd.DataFrame, store: Store) -> pd.DataFrame:
+    """v9: grid state at the origin from Fingrid real-time series (3 min / 1 min, averaged to 15 min),
+    usable 15 min after their quarter-hour ends (measured delay 1.2-4.1 min). At a full-hour origin
+    the latest usable quarter-hour ends 15 min before the origin, against 60 min for the v4 series.
+
+    - surplus/deficit (198): measured net import minus the confirmed exchange program, i.e. Finland's
+      real-time area imbalance (+ surplus, - deficit). The most direct direction signal we have.
+    - frequency deviation (177, mHz), net import (194), electric boilers (371, price-responsive load),
+      battery net discharge (398 - 399; batteries mostly sit in reserves, so this tracks activation).
+    - fresh wind and consumption error: real-time wind (181) / consumption (193) minus the organiser's
+      day-ahead forecasts for the same quarter-hours.
+    All reads go through Store.get, so the availability rule applies."""
+    out = df.copy()
+    origins = pd.DatetimeIndex(df["forecast_origin_utc"].unique()).as_unit("ns")
+    o_ns = origins.asi8
+    feats, cuts = {}, []
+
+    def window(sid: str, k: int) -> tuple[np.ndarray, np.ndarray]:
+        li = store.latest_index(sid, o_ns)
+        cuts.append(store.grid[np.clip(li, 0, None)].asi8)
+        return lag_window(store, sid, li, o_ns, k), li
+
+    w, li_s = window("fi_surplus_deficit_rt", 16)
+    feats["grid_surplus_last"] = w[:, 0]
+    feats["grid_surplus_mean1h"] = np.nanmean(w[:, :4], axis=1)
+    feats["grid_surplus_mean4h"] = np.nanmean(w, axis=1)
+    feats["grid_surplus_trend_1h"] = w[:, 0] - w[:, 3]
+    w, _ = window("fi_frequency_rt", 4)
+    dev = (w - 50.0) * 1000.0
+    feats["grid_freq_dev_last"] = dev[:, 0]
+    feats["grid_freq_dev_mean1h"] = np.nanmean(dev, axis=1)
+    w, _ = window("fi_net_import_rt", 5)
+    feats["grid_net_import_last"] = w[:, 0]
+    feats["grid_net_import_change_1h"] = w[:, 0] - w[:, 4]
+    w, _ = window("fi_eboiler_rt", 5)
+    feats["grid_eboiler_last"] = w[:, 0]
+    feats["grid_eboiler_change_1h"] = w[:, 0] - w[:, 4]
+    wd, li_b = window("fi_bess_discharge_rt", 4)
+    wc = lag_window(store, "fi_bess_charge_rt", li_b, o_ns, 4)
+    cuts.append(store.grid[np.clip(store.latest_index("fi_bess_charge_rt", o_ns), 0, None)].asi8)
+    net = wd - wc
+    feats["grid_bess_net_last"] = net[:, 0]
+    feats["grid_bess_net_mean1h"] = np.nanmean(net, axis=1)
+    for sid, fc, short in (("fi_wind_production_rt", "fi_wind_fc_da", "wind"),
+                           ("fi_consumption_rt", "fi_consumption_fc_da", "cons")):
+        act, li = window(sid, 4)
+        err = act - lag_window(store, fc, li, o_ns, 4)
+        feats[f"grid_{short}_err_last"] = err[:, 0]
+        feats[f"grid_{short}_err_mean1h"] = np.nanmean(err, axis=1)
+    feats["grid_obs_idx"] = li_s.astype(float)
+
+    per_origin = pd.DataFrame(feats, index=origins)
+    o_key = pd.DatetimeIndex(df["forecast_origin_utc"]).as_unit("ns")
+    rows = per_origin.reindex(o_key)
+    for c in per_origin.columns:
+        if c != "grid_obs_idx":
+            out[c] = rows[c].to_numpy()
+    d_idx = store.index_of(df["delivery_start_utc"])
+    out["grid_obs_lead_h"] = (d_idx - rows["grid_obs_idx"].to_numpy()) / 4.0
     cut = df["data_cutoff_utc"].dt.as_unit("ns").astype("int64").to_numpy()
     for c in cuts:
         cut = np.maximum(cut, pd.Series(c, index=origins).reindex(o_key).to_numpy())
@@ -433,4 +502,5 @@ def build_table(origins: pd.DatetimeIndex | None = None, with_targets: bool = Tr
     return build(st, pd.DatetimeIndex(origins), with_targets=with_targets, nwp=nwp_tables,
                  wind_obs=feature_set in WIND_OBS_SETS,
                  hist=load_hist() if feature_set in HIST_SETS else None, nwp2=nwp2,
-                 system=feature_set in SYSTEM_SETS, umm=_umm_for(feature_set))
+                 system=feature_set in SYSTEM_SETS, umm=_umm_for(feature_set),
+                 grid=feature_set in GRID_SETS)

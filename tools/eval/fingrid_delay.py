@@ -26,6 +26,12 @@ DATASETS = {
     192: "production, real time 3 min",
     193: "consumption, real time 3 min",
     188: "nuclear, real time 3 min",
+    198: "surplus/deficit, real time 3 min",
+    177: "frequency, real time 3 min",
+    194: "net import, real time 3 min",
+    371: "electric boilers, real time 1 min",
+    398: "BESS discharging, real time 3 min",
+    399: "BESS charging, real time 3 min",
 }
 URL = "https://data.fingrid.fi/api/datasets/{id}/data/latest"
 OUT = REPO_ROOT / "static_data" / "work" / "diagnostics" / "fingrid_delay.csv"

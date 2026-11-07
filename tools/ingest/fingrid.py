@@ -44,6 +44,17 @@ DATASETS = {
     75: ("fi_wind_production", "MWh/h", ("lag", 60)),          # wind power generation, 15 min
     188: ("fi_nuclear_production_rt", "MW", ("lag", 60)),     # nuclear real-time, 3 min -> 15 min mean
     191: ("fi_hydro_production_rt", "MW", ("lag", 60)),       # hydro real-time, 3 min -> 15 min mean
+    # grid state at the origin (feature sets v9 / v9m). Real-time series, 15 min after the quarter-hour
+    # ends: tools/eval/fingrid_delay.py measured 1.2-4.1 min publication delay (7 Nov 2026), so 15 min
+    # is a >3x margin; with the full-hour rounding any lag <= 15 min gives the same first usable origin.
+    198: ("fi_surplus_deficit_rt", "MW", ("lag", 15)),       # measured net import - confirmed program
+    177: ("fi_frequency_rt", "Hz", ("lag", 15)),
+    194: ("fi_net_import_rt", "MW", ("lag", 15)),
+    371: ("fi_eboiler_rt", "MW", ("lag", 15)),               # 1 min -> 15 min mean
+    398: ("fi_bess_discharge_rt", "MW", ("lag", 15)),
+    399: ("fi_bess_charge_rt", "MW", ("lag", 15)),
+    181: ("fi_wind_production_rt", "MW", ("lag", 15)),
+    193: ("fi_consumption_rt", "MW", ("lag", 15)),
 }
 FORECAST_DATASETS = {165, 166, 245, 246, 247, 248, 241, 242}   # never via the API (latest version only)
 PACKAGE_SERIES = {319, 244, 106, 375, 376, 369, 124, 74}

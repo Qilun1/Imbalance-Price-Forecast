@@ -97,22 +97,30 @@ uv run python -m tools.cli ingest starter --src <path to starter_package_v1 or i
 uv run python -m tools.cli ingest windsites
 uv run python -m tools.cli ingest locations
 uv run python -m tools.cli ingest fingrid --datasets 75 --start 2026-05-31 --end 2026-11-02T07:00
+uv run python -m tools.cli ingest fingrid --datasets 198,177,194,371,398,399,181,193 --start 2026-05-31 --end 2026-11-02T07:00
 uv run python -m tools.cli ingest openmeteo --models ecmwf_ifs --group wind
 uv run python -m tools.cli ingest openmeteo --models metno_nordic --group wind
 uv run python -m tools.cli ingest openmeteo --models metno_nordic --group pop
-# 2. Feature tables, then the two structural mixture members (train val + final, score, test export)
+# 2. Feature tables, then four structural mixture members (train val + final, score, test export):
+#    v4 / v4m for steps 9-40, v9 / v9m (+ fresh Fingrid grid state) for steps 1-8
 uv run python -m tools.cli features --set v4
 uv run python -m tools.cli features --set v4m
+uv run python -m tools.cli features --set v9
+uv run python -m tools.cli features --set v9m
 uv run python -m tools.training.mixture_pipeline --config tools/training/configs/mix_v4b.yaml
 uv run python -m tools.training.mixture_pipeline --config tools/training/configs/mix_v4mb.yaml
-# 3. Average them, then apply the validation-fitted spike shift and band widths
-uv run python -m tools.eval.ensemble --name ens_mix --members mix_v4b mix_v4mb --period val
-uv run python -m tools.eval.ensemble --name ens_mix --members mix_v4b mix_v4mb --period test
-uv run python -m tools.eval.spike_shift --model ens_mix --apply
-uv run python -m tools.eval.band_width --model ens_mix_spk --apply
+uv run python -m tools.training.mixture_pipeline --config tools/training/configs/mix_v9b.yaml
+uv run python -m tools.training.mixture_pipeline --config tools/training/configs/mix_v9mb.yaml
+# 3. Lead-time split (v9 members for steps 1-8), average, then the validation-fitted spike shift and band widths
+for P in val test; do S=$([ $P = val ] && echo -val); \
+  uv run python -m tools.eval.step_split --name split_v9b_v4b --early mix_v9b$S --late mix_v4b$S --period $P; \
+  uv run python -m tools.eval.step_split --name split_v9mb_v4mb --early mix_v9mb$S --late mix_v4mb$S --period $P; \
+  uv run python -m tools.eval.ensemble --name ens_mixg --members split_v9b_v4b split_v9mb_v4mb --period $P; done
+uv run python -m tools.eval.spike_shift --model ens_mixg --apply
+uv run python -m tools.eval.band_width --model ens_mixg_spk --apply
 ```
 
-The submission is `static_data/work/submissions/ens_mix_spk_bw_test.csv` (submit it as
+The submission is `static_data/work/submissions/ens_mixg_spk_bw_test.csv` (submit it as
 `forecast_backtest.csv`); every step runs the organiser's validator or scorer. More commands:
 `tools/README.md`. Dashboard: `backend/api/README.md` (API, runs on mock data without licensed files)
 and `frontend/README.md`. Data sources and licences: `docs/SOURCES_AND_LICENCES.md`.
