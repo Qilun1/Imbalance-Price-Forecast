@@ -23,17 +23,9 @@ from tools.ingest.http import Client
 DATASETS = {
     75: "wind generation, 15 min",
     181: "wind generation, real time 3 min",
-    188: "nuclear, real time 3 min",
-    191: "hydro, real time 3 min",
     192: "production, real time 3 min",
     193: "consumption, real time 3 min",
-    177: "frequency, real time",
-    124: "consumption, 15 min",
-    74: "production, 15 min",
-    319: "imbalance price",
-    244: "mFRR up price",
-    375: "mFRR up activated",
-    369: "mFRR direction",
+    188: "nuclear, real time 3 min",
 }
 URL = "https://data.fingrid.fi/api/datasets/{id}/data/latest"
 OUT = REPO_ROOT / "static_data" / "work" / "diagnostics" / "fingrid_delay.csv"
@@ -44,7 +36,7 @@ def main() -> None:
     ap.add_argument("--rounds", type=int, default=6)
     ap.add_argument("--every", type=int, default=300, help="seconds between rounds")
     a = ap.parse_args()
-    c = Client(min_interval_s=2.1, headers={"x-api-key": api_key()})
+    c = Client(min_interval_s=7.0, headers={"x-api-key": api_key()})
     rows = []
     for r in range(a.rounds):
         for ds, name in DATASETS.items():
