@@ -32,6 +32,8 @@
   --color-mute: #a8a5a0;
   --color-on-dark: #ffffff;
   --color-hairline: #e1dcd3;
+  /* Added: a softer box edge, so panels and cards do not stand out. Decorative, no contrast minimum. */
+  --color-hairline-soft: #ece7df;
   --color-error: #e33a22;
 
   /* Added: see docs/ui-decisions.md for each one and its contrast. */
@@ -65,6 +67,8 @@
   --color-series-3: #a8391f;
   --color-series-4: #7f8f24;
   --color-series-5: #6d5a9a;
+  /* Added: the spot line, a vivid violet that stands apart from ink, gold and the up/down colours. */
+  --color-chart-spot: #7c3aed;
   --color-series-6: #c07c2e;
 
   /* Dense type scale: 12 / 13 / 14 / 16 / 20 / 24 / 32 px. */

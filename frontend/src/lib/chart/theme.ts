@@ -20,6 +20,7 @@ export function withAlpha(hex: string, opacity: number): string {
   return `rgba(${channels.join(",")},${opacity})`;
 }
 
+/** Midnight ticks get the date, the others the time. Every chart holds quarter-hours, so midnight is always there. */
 function axisLabel(time: number): string {
   const iso = fromUnixSeconds(time);
   const isMidnight = utcHour(iso) === 0 && new Date(iso).getUTCMinutes() === 0;

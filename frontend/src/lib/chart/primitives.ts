@@ -31,7 +31,8 @@ export class StepBand implements ISeriesPrimitive<Time> {
   private points: BandPoint[] = [];
   private readonly views: readonly IPrimitivePaneView[];
 
-  constructor(private readonly style: { fill: string; edge: string }) {
+  /** `shape: "line"` joins the points straight, to sit under plain (not stepped) lines. No `edge`, no outline. */
+  constructor(private readonly style: { fill: string; edge?: string; shape?: "step" | "line" }) {
     this.views = [paneView((target) => this.paint(target))];
   }
 
@@ -76,6 +77,15 @@ export class StepBand implements ISeriesPrimitive<Time> {
     if (coordinates.length < 2) return;
 
     target.useMediaCoordinateSpace(({ context }) => {
+      if (this.style.shape === "line") {
+        context.beginPath();
+        for (const point of coordinates) context.lineTo(point.x, point.upper);
+        for (const point of coordinates.toReversed()) context.lineTo(point.x, point.lower);
+        context.closePath();
+        context.fillStyle = this.style.fill;
+        context.fill();
+        return;
+      }
       const pairs = coordinates.slice(0, -1).map((point, index) => [point, coordinates[index + 1] ?? point] as const);
       context.beginPath();
       for (const [left, right] of pairs) {
@@ -89,6 +99,7 @@ export class StepBand implements ISeriesPrimitive<Time> {
       context.closePath();
       context.fillStyle = this.style.fill;
       context.fill();
+      if (!this.style.edge) return;
 
       context.strokeStyle = this.style.edge;
       context.lineWidth = 1;

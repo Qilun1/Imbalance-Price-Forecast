@@ -33,6 +33,19 @@ export function formatPrice(value: Maybe): string {
   return isNumber(value) ? signedText(value, 1, "") : NO_VALUE;
 }
 
+/** A price with the euro sign in front, as "€63.9"; `plus` signs positive values, as "+€5.0". */
+export function formatEuro(value: Maybe, { plus = false, digits = 1 } = {}): string {
+  if (!isNumber(value)) return NO_VALUE;
+  const text = grouped(Math.abs(value), digits);
+  if (Number(Math.abs(value).toFixed(digits)) === 0) return `€${text}`;
+  return `${value < 0 ? MINUS : plus ? "+" : ""}€${text}`;
+}
+
+/** Whole euros, for chart axes where decimals only add noise. */
+export function formatPriceAxis(value: Maybe): string {
+  return isNumber(value) ? signedText(value, 0, "") : NO_VALUE;
+}
+
 export function formatPriceWithUnit(value: Maybe): string {
   return isNumber(value) ? `${formatPrice(value)} ${PRICE_UNIT}` : NO_VALUE;
 }

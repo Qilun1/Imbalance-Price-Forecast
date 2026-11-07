@@ -13,7 +13,9 @@ import {
   formatMinutes,
   formatPercent,
   formatPoints,
+  formatEuro,
   formatPrice,
+  formatPriceAxis,
   formatPriceRange,
   formatPriceWithUnit,
   formatScore,
@@ -38,6 +40,13 @@ describe("prices", () => {
     expect(formatPrice(63.85)).toBe("63.9");
     expect(formatPrice(-12.34)).toBe(`${MINUS}12.3`);
     expect(formatPrice(1234.5)).toBe("1,234.5");
+    expect(formatPriceAxis(-49.6)).toBe(`${MINUS}50`);
+    expect(formatPriceAxis(0.4)).toBe("0");
+    expect(formatEuro(63.85)).toBe("€63.9");
+    expect(formatEuro(-12.34)).toBe(`${MINUS}€12.3`);
+    expect(formatEuro(67, { plus: true })).toBe("+€67.0");
+    expect(formatEuro(97.9, { digits: 0 })).toBe("€98");
+    expect(formatEuro(null)).toBe("–");
     expect(formatPrice(0)).toBe("0.0");
   });
 
