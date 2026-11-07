@@ -143,6 +143,11 @@ The submission file `forecast_backtest.csv` must keep exactly:
   anywhere, including cloud databases, logs, notebooks with outputs, screenshots or chat. Do not print
   its rows even locally in shared output. Our code may be public; the data may not. Delete it after
   the event.
+- **Exception (team decision, 7 Nov 2026):** the dashboard may show the spot price and the spot + 50
+  and spot - 50 EUR/MWh spike thresholds, and our demo video and screenshots may show that dashboard.
+  The API serves a spot value only from its `first_usable_origin_utc` (rule 4). Nothing else changes:
+  the data itself still never goes into git, logs, cloud databases, hosted services, notebooks with
+  outputs or chat, and it is still deleted after the event.
 - Fingrid and ENTSO-E data are CC BY 4.0. We are responsible for the licence of every source we add,
   and every source and component must be listed with its licence in the submission.
 - `static_data/` and `backend/infer_data/` are gitignored and must stay so. `backend/artifacts/` is
