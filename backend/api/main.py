@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.api.repository import OutOfRange, get_repository
-from backend.api.routes import actuals, alerts, forecast, hindsight, meta, notes, performance
+from backend.api.routes import actuals, alerts, forecast, hindsight, meta, notes, performance, umm
 
 
 @asynccontextmanager
@@ -27,7 +27,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Imbalance price forecast API", version="0.1.0", lifespan=lifespan)
 
-for module in (meta, forecast, actuals, alerts, notes, performance, hindsight):
+for module in (meta, forecast, actuals, alerts, notes, performance, hindsight, umm):
     app.include_router(module.router, prefix="/api")
 
 

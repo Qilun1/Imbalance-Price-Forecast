@@ -55,11 +55,11 @@ class Repository:
         self._challenger_by_origin = dict(tuple(self.challenger.groupby("forecast_origin_utc")))
         self.origins = pd.DatetimeIndex(sorted(self._primary_by_origin))
         self.observations = store.load_observations(list(DISPLAY_SERIES), settings.store_db)
-        self._spot_rows = self.observations[self.observations["series_id"] == SPOT_SERIES]
-        self._alerts_by_origin: dict[pd.Timestamp, list[Alert]] = {}
         self.event_probs = self._load("notes")
         self._notes_by_origin = dict(tuple(self.event_probs.groupby("forecast_origin_utc")))
         self.low_skill = {p.notes: _low_skill_events(p.notes) for p in settings.periods if p.notes}
+        self._spot_rows = self.observations[self.observations["series_id"] == SPOT_SERIES]
+        self._alerts_by_origin: dict[pd.Timestamp, list[Alert]] = {}
 
     def _load(self, role: str) -> pd.DataFrame:
         """Rows of every period, each limited to the origins that period answers for: forecasts, or
