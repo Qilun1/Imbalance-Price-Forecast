@@ -108,6 +108,8 @@ class Situation(BaseModel):
     first_origin_utc: datetime
     last_origin_utc: datetime
     alert: Alert
+    outcome: Literal["happened", "did_not_happen", "pending", "not_applicable"] = "pending"
+    outcome_note: str | None = None
 
 
 class AlertHistory(BaseModel):

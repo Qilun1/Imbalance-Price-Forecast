@@ -213,6 +213,32 @@ def test_history_lists_each_situation_once(client):
     assert body["hours"][0]["review"] + body["hours"][0]["watch"] == len(per_hour)
 
 
+def situation(client, kind, as_of="2026-10-28T20:00:00Z", title=None):
+    situations = client.get("/api/alerts/history", params={"as_of": as_of}).json()["situations"]
+    return next(s for s in situations if s["alert"]["kind"] == kind and (title is None or s["alert"]["title"] == title))
+
+
+def test_a_spike_that_came_true_is_marked_so(client):
+    spike = situation(client, "spike_risk", title="Risk of an exceptionally high price")
+    assert spike["outcome"] == "happened" and "quarter-hours" in spike["outcome_note"]
+
+
+def test_a_revision_is_judged_against_the_actual_price(client):
+    revision = situation(client, "forecast_changed")
+    assert revision["outcome"] in ("happened", "did_not_happen") and "actual price" in revision["outcome_note"]
+
+
+def test_an_outcome_waits_until_the_prices_are_usable(client):
+    raised_before_the_window = "2026-10-23T09:00:00Z"
+    spike = situation(client, "spike_risk", as_of=raised_before_the_window)
+    assert spike["outcome"] == "pending" and spike["outcome_note"] is None
+
+
+def test_situations_that_claim_nothing_are_not_judged(client):
+    for kind in ("high_uncertainty", "conflicting_signals", "stale_data"):
+        assert situation(client, kind)["outcome"] == "not_applicable"
+
+
 def test_history_never_looks_past_the_viewing_time(client):
     as_of = "2026-10-24T00:00:00Z"
     body = client.get("/api/alerts/history", params={"as_of": as_of, "to": "2026-10-29T00:00:00Z"}).json()

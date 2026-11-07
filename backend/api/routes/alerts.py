@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import AwareDatetime
 
 from backend.api.alerts import build_history
+from backend.api.outcomes import add_outcomes
 from backend.api.repository import Repository, get_repository, to_utc
 from backend.api.schemas import AlertHistory, Alerts
 
@@ -31,4 +32,5 @@ def get_alert_history(start: AwareDatetime | None = Query(None, alias="from", de
     last = to_utc(end) if end is not None else moment + pd.Timedelta(minutes=1)
     origins = repo.origins[(repo.origins >= first) & (repo.origins <= moment) & (repo.origins < last)]
     hours, situations = build_history({origin: repo.alerts_at(origin) for origin in origins})
-    return AlertHistory(as_of_utc=moment, from_utc=first, to_utc=last, hours=hours, situations=situations)
+    return AlertHistory(as_of_utc=moment, from_utc=first, to_utc=last, hours=hours,
+                        situations=add_outcomes(repo, situations, moment))
