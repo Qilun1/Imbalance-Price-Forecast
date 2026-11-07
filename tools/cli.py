@@ -54,11 +54,13 @@ def cmd_ingest(a):
     elif a.source == "locations":
         from tools.ingest.windsites import load_sites
         sites = load_sites()
-        store.set_locations(sites)
-        print(f"registered {len(sites)} NWP locations, {sites['capacity_mw'].sum():.0f} MW")
+        store.set_locations(sites, group="wind")
+        from tools.ingest.popsites import load_pop_sites
+        store.set_locations(load_pop_sites(), group="pop")
+        print(f"registered {len(sites)} wind and {len(load_pop_sites())} population NWP locations, {sites['capacity_mw'].sum():.0f} MW")
     elif a.source == "openmeteo":
         from tools.ingest.openmeteo import run
-        run(a.start, a.end, a.models.split(",") if a.models else None, keep_cache=not a.no_cache)
+        run(a.start, a.end, a.models.split(",") if a.models else None, keep_cache=not a.no_cache, group=a.group)
     elif a.source == "fingrid":
         from tools.ingest.fingrid import run
         run([int(x) for x in a.datasets.split(",")], a.start, a.end)
@@ -212,6 +214,7 @@ def main(argv=None):
     s.add_argument("--src"); s.add_argument("--start", default="2026-05-30"); s.add_argument("--end", default="2026-11-02T06:00")
     s.add_argument("--models"); s.add_argument("--datasets", default="75")
     s.add_argument("--no-cache", action="store_true", help="openmeteo: do not keep raw JSON")
+    s.add_argument("--group", default="wind", choices=["wind", "pop"], help="openmeteo: wind sites or population centres")
     s.set_defaults(f=cmd_ingest)
     sub.add_parser("status").set_defaults(f=cmd_status)
     s = sub.add_parser("nwp-delay"); s.add_argument("--model", default="ecmwf_ifs"); s.set_defaults(f=cmd_nwp_delay)

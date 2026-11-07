@@ -67,10 +67,13 @@ class RunTable:
         return np.where(run_idx >= 0, (origin_ns - self.init[r]) / HOUR_NS, np.nan)
 
 
-def national_runs(runs: pd.DataFrame, capacity: pd.Series) -> tuple[RunTable | None, RunTable | None]:
-    """Aggregate per-location runs to national wind MW and capacity-weighted temperature."""
+def national_runs(runs: pd.DataFrame, capacity: pd.Series,
+                  temp_weights: pd.Series | None = None) -> tuple[RunTable | None, RunTable | None]:
+    """Aggregate per-location runs to national wind MW and weighted temperature (population weights if
+    given, else wind-capacity weights)."""
     if runs.empty:
         return None, None
+    all_runs = runs
     runs = runs[runs["location_id"].isin(capacity.index)].copy()
     runs["cap"] = runs["location_id"].map(capacity).astype(float)
     keys = ["run_init_utc", "first_usable_origin_utc", "valid_time_utc"]
@@ -81,16 +84,23 @@ def national_runs(runs: pd.DataFrame, capacity: pd.Series) -> tuple[RunTable | N
         g = w.groupby(keys, as_index=False).agg(mw=("mw", "sum"), cap=("cap", "sum"))
         g = g[g["cap"] >= 0.8 * capacity.sum()]          # skip valid times with missing locations
         wind = RunTable(g, "mw")
-    t = runs[runs["series_id"] == TEMP_SERIES]
+    if temp_weights is not None and not temp_weights.empty:
+        t = all_runs[(all_runs["series_id"] == TEMP_SERIES) & all_runs["location_id"].isin(temp_weights.index)].copy()
+        t["cap"] = t["location_id"].map(temp_weights).astype(float)
+        full = temp_weights.sum()
+    else:
+        t = runs[runs["series_id"] == TEMP_SERIES]
+        full = capacity.sum()
     if not t.empty:
         t = t.assign(wt=t["value"] * t["cap"])
         g = t.groupby(keys, as_index=False).agg(wt=("wt", "sum"), cap=("cap", "sum"))
+        g = g[g["cap"] >= 0.8 * full]
         g["temp"] = g["wt"] / g["cap"]
         temp = RunTable(g, "temp")
     return wind, temp
 
 
-def load(visible_before=None) -> tuple[RunTable | None, RunTable | None]:
+def load(visible_before=None, temp_group: str = "wind") -> tuple[RunTable | None, RunTable | None]:
     """Load national run tables from the store. `visible_before` (origin) drops later runs entirely
     (used by the leakage check)."""
     runs = db.load_forecast_runs([WIND_SERIES, TEMP_SERIES])
@@ -98,7 +108,8 @@ def load(visible_before=None) -> tuple[RunTable | None, RunTable | None]:
         runs = runs[runs["first_usable_origin_utc"] <= visible_before]
     if runs.empty:
         return None, None
-    capacity = db.locations()
+    capacity = db.locations("wind")
     if capacity.empty:
         raise RuntimeError("no NWP locations registered: run `uv run python -m tools.cli ingest locations`")
-    return national_runs(runs, capacity)
+    temp_w = db.locations("pop") if temp_group == "pop" else None
+    return national_runs(runs, capacity, temp_w)

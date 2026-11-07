@@ -91,13 +91,22 @@ def fetch_run(client: Client, model: str, run: pd.Timestamp, sites: pd.DataFrame
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
 
-def run(start: str, end: str, models: list[str] | None = None, keep_cache: bool = True) -> None:
-    global KEEP_CACHE
+GROUP_VARIABLES = {"wind": ["wind_speed_100m", "temperature_2m"], "pop": ["temperature_2m"]}
+
+
+def run(start: str, end: str, models: list[str] | None = None, keep_cache: bool = True, group: str = "wind") -> None:
+    """group 'wind': ~10 capacity-weighted wind sites; group 'pop': 7 population centres (temperature)."""
+    global KEEP_CACHE, VARIABLES
     KEEP_CACHE = keep_cache
-    sites = load_sites()
-    store.set_locations(sites)
+    VARIABLES = GROUP_VARIABLES[group]
+    if group == "pop":
+        from tools.ingest.popsites import load_pop_sites
+        sites = load_pop_sites()
+    else:
+        sites = load_sites()
+    store.set_locations(sites, group=group)
     models = models or DEFAULT_MODELS
-    print(f"{len(sites)} sites, {sites['capacity_mw'].sum():.0f} MW, variables {VARIABLES}, {FORECAST_HOURS} h per run")
+    print(f"group {group}: {len(sites)} sites, variables {VARIABLES}, {FORECAST_HOURS} h per run")
     client = Client(min_interval_s=0.6, budget=Budget(**FREE_BUDGET))
     for model in models:
         delay, hours = MODELS[model]

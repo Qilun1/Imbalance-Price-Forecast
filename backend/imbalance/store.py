@@ -63,9 +63,10 @@ CREATE TABLE IF NOT EXISTS locations (
     location_id VARCHAR PRIMARY KEY,
     lat DOUBLE,
     lon DOUBLE,
-    capacity_mw DOUBLE,
+    capacity_mw DOUBLE,          -- weight: wind capacity (group wind) or population (group pop)
     description VARCHAR
 );
+ALTER TABLE locations ADD COLUMN IF NOT EXISTS grp VARCHAR DEFAULT 'wind';
 CREATE TABLE IF NOT EXISTS ingest_log (
     ingest_batch VARCHAR,
     source VARCHAR,
@@ -150,20 +151,23 @@ def drop_forecast_runs(source: str, path: Path = STATIC_DB) -> int:
     return n
 
 
-def set_locations(df: pd.DataFrame, path: Path = STATIC_DB) -> None:
-    """Replace the NWP sampling locations (site id, position, capacity weight)."""
+def set_locations(df: pd.DataFrame, group: str = "wind", path: Path = STATIC_DB) -> None:
+    """Replace the NWP sampling locations of one group (wind: capacity weights; pop: population weights)."""
     df = df.rename(columns={"site_id": "location_id"})[["location_id", "lat", "lon", "capacity_mw"]].copy()
-    df["description"] = "wind site (tools/ingest/windsites.py)"
+    df["description"] = {"wind": "wind site (tools/ingest/windsites.py)",
+                         "pop": "population centre (tools/ingest/popsites.py)"}.get(group, group)
+    df["grp"] = group
     with connect(path) as con:
         con.register("incoming", df)
-        con.execute("DELETE FROM locations").fetchall()
-        con.execute("INSERT INTO locations SELECT * FROM incoming").fetchall()
+        con.execute("DELETE FROM locations WHERE grp = ?", [group]).fetchall()
+        con.execute("INSERT INTO locations (location_id, lat, lon, capacity_mw, description, grp) "
+                    "SELECT location_id, lat, lon, capacity_mw, description, grp FROM incoming").fetchall()
 
 
-def locations(path: Path = STATIC_DB) -> pd.Series:
-    """Capacity weight per location_id (empty if none registered)."""
+def locations(group: str = "wind", path: Path = STATIC_DB) -> pd.Series:
+    """Weight per location_id for a group (empty if none registered)."""
     with connect(path) as con:      # read/write so the table exists on older stores
-        df = con.execute("SELECT location_id, capacity_mw FROM locations").df()
+        df = con.execute("SELECT location_id, capacity_mw FROM locations WHERE grp = ?", [group]).df()
     return df.set_index("location_id")["capacity_mw"]
 
 
