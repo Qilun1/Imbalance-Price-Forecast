@@ -105,11 +105,15 @@ def run(datasets: list[int], start: str, end: str) -> None:
                       "format": "json", "pageSize": 20000, "page": page, "sortOrder": "asc"}
             cache = RAW_DIR / "fingrid" / str(ds) / f"{start}_{end}_p{page}.json".replace(":", "")
             data = client.get_json(URL.format(id=ds), params=params, cache=cache)
-            rows += data.get("data", [])
+            got = data.get("data", [])
+            rows += got
             pag = data.get("pagination") or {}
-            if not pag.get("nextPage"):
+            if page == 1:
+                last_page = pag.get("lastPage") or 1
+            # Fingrid returns nextPage/lastPage only on page 1, so page by count, not by nextPage
+            if page >= last_page or len(got) < params["pageSize"]:
                 break
-            page = pag["nextPage"]
+            page += 1
         if not rows:
             print(f"{ds} {sid}: no rows")
             continue
