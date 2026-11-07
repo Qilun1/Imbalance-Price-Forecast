@@ -498,6 +498,8 @@ export interface components {
             model: string;
             /** Baseline */
             baseline: string;
+            /** Challenger */
+            challenger?: string | null;
             /** First Origin Utc */
             first_origin_utc: string | null;
             /** Last Origin Utc */

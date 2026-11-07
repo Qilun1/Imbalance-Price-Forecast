@@ -1,0 +1,16 @@
+# lgbm_v5ms: lgbm_v4ms + out-of-sample long-history direction head (tools/training/hist_heads.py)
+# lgbm_v4ms: lgbm_v3s + observed wind error vs Fingrid day-ahead forecast (features.add_wind_obs)
+# v3: MET Nordic (MEPS 2.5 km, Single Runs) wind + population-weighted temperature.
+name: lgbm_v5ms
+feature_set: v5m
+widen: 1.6            # same as v1 until re-tuned on validation
+regressor:
+  n_estimators: 150
+  learning_rate: 0.03
+  num_leaves: 31
+  min_child_samples: 200
+classifier:
+  n_estimators: 110
+  learning_rate: 0.03
+  num_leaves: 31
+  min_child_samples: 200

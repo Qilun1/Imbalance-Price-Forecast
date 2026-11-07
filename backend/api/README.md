@@ -45,6 +45,9 @@ viewing time; if it is left out, the API uses the newest forecast.
   validation forecasts only; never tune them on test data.
 - **Outcomes:** `outcomes.py` judges a past situation on prices usable at `as_of`. It is a diagnostic for
   display, so test-period outcomes must not guide model choice, tuning or thresholds (AGENTS.md rule 4).
+- **Conflicting signals:** independent sources must disagree, not two outputs of one model. The main
+  forecast is compared with a second model on different input data from the same origin
+  (`lgbm_v2`, which adds ECMWF weather; `IMBALANCE_CHALLENGER_VAL` / `_TEST`, `none` turns it off).
 
 Mock data lives in `backend/infer_data/mock_forecasts.duckdb` (gitignored). `mock.py` is invented from
 a seed, reads none of the organiser's files, and scripts one of each situation; see `SCENARIOS` there.

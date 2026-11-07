@@ -21,6 +21,7 @@ def get_meta(repo: Repository = Depends(get_repository)) -> Meta:
     for period in repo.settings.periods:
         origins = repo.period_origins(period)
         periods.append(PeriodInfo(name=period.name, model=period.model, baseline=period.baseline,
+                                  challenger=period.challenger,
                                   first_origin_utc=origins[0] if len(origins) else None,
                                   last_origin_utc=origins[-1] if len(origins) else None, origins=len(origins)))
     return Meta(mode=repo.settings.mode, note=NOTES[repo.settings.mode],

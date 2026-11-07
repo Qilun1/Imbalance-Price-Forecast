@@ -1,0 +1,16 @@
+# lgbm_v5s: lgbm_v4s + out-of-sample long-history direction head (tools/training/hist_heads.py)
+# lgbm_v4s: lgbm_v2s + observed wind error vs Fingrid day-ahead forecast (features.add_wind_obs)
+# v2: v1 + vintaged NWP weather proxies (ECMWF IFS 9 km via Open-Meteo Single Runs).
+name: lgbm_v5s
+feature_set: v5
+widen: 1.6            # same as v1 until re-tuned on validation
+regressor:
+  n_estimators: 150
+  learning_rate: 0.03
+  num_leaves: 31
+  min_child_samples: 200
+classifier:
+  n_estimators: 110
+  learning_rate: 0.03
+  num_leaves: 31
+  min_child_samples: 200

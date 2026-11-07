@@ -48,7 +48,9 @@ class Repository:
             names = [p.model for p in settings.periods]
             raise RuntimeError(f"no forecasts for {names} in {settings.forecast_db}")
         self.baseline = self._load("baseline")
+        self.challenger = self._load("challenger")
         self._primary_by_origin = dict(tuple(self.primary.groupby("forecast_origin_utc")))
+        self._challenger_by_origin = dict(tuple(self.challenger.groupby("forecast_origin_utc")))
         self.origins = pd.DatetimeIndex(sorted(self._primary_by_origin))
         self.observations = store.load_observations(list(DISPLAY_SERIES), settings.store_db)
         self._spot_rows = self.observations[self.observations["series_id"] == SPOT_SERIES]
@@ -59,6 +61,8 @@ class Repository:
         frames = []
         periods = self.settings.periods
         for i, period in enumerate(periods):
+            if getattr(period, role) is None:
+                continue
             df = forecasts.read(getattr(period, role), None, self.settings.forecast_db)
             if period.first_origin is not None:
                 df = df[df["forecast_origin_utc"] >= period.first_origin]
@@ -92,10 +96,19 @@ class Repository:
             return None
         return previous.sort_values("step").reset_index(drop=True)
 
+    def challenger_forecast(self, origin: pd.Timestamp) -> pd.DataFrame | None:
+        """The second model's forecast made at the same origin, or None. Same origin means the same
+        data cutoff, so this adds no data the main forecast could not have used."""
+        rows = self._challenger_by_origin.get(origin)
+        if rows is None or rows["model"].iloc[0] == self._primary_by_origin[origin]["model"].iloc[0]:
+            return None
+        return rows.sort_values("step").reset_index(drop=True)
+
     def alerts_at(self, origin: pd.Timestamp) -> list[Alert]:
         """The alerts of one forecast. A past forecast never changes, so each is built once."""
         if origin not in self._alerts_by_origin:
-            self._alerts_by_origin[origin] = build_alerts(self.forecast(origin), self.previous_forecast(origin))
+            self._alerts_by_origin[origin] = build_alerts(self.forecast(origin), self.previous_forecast(origin),
+                                                         self.challenger_forecast(origin))
         return self._alerts_by_origin[origin]
 
     def prepare_alerts(self) -> None:
@@ -147,7 +160,7 @@ def get_repository() -> Repository:
     if not settings.forecast_db.exists():
         generate(settings.forecast_db)
     repo = Repository(settings)
-    if repo.spot_known_until(repo.origins[-1]) is None:     # a mock file from before spot was added
+    if repo.spot_known_until(repo.origins[-1]) is None or repo.challenger.empty:     # an older mock file
         generate(settings.forecast_db)
         repo = Repository(settings)
     return repo

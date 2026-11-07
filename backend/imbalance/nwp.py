@@ -108,7 +108,11 @@ def series_ids(model: str) -> tuple[str, str]:
 # feature set -> (NWP model, temperature weighting). v2 is kept unchanged for reproducibility.
 NWP_SPECS = {"v2": ("ecmwf_ifs", "wind"),
              "v2p": ("ecmwf_ifs", "pop"),       # ECMWF wind + population-weighted temperature
-             "v3": ("metno_nordic", "pop")}     # MET Nordic (MEPS 2.5 km) wind + population-weighted temperature
+             "v3": ("metno_nordic", "pop"),     # MET Nordic (MEPS 2.5 km) wind + population-weighted temperature
+             "v4": ("ecmwf_ifs", "wind"),       # v2 + observed wind error (features.WIND_OBS_SETS)
+             "v4m": ("metno_nordic", "pop"),    # v3 + observed wind error
+             "v5": ("ecmwf_ifs", "wind"),       # v4 + long-history direction head
+             "v5m": ("metno_nordic", "pop")}    # v4m + long-history direction head
 
 
 def load(visible_before=None, temp_group: str = "wind",
