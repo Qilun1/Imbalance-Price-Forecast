@@ -122,7 +122,7 @@ class Note(BaseModel):
 class Notes(BaseModel):
     as_of_utc: datetime
     origin_utc: datetime
-    persona: Persona
+    persona: Persona | None
     model: str
     notes: list[Note]
 

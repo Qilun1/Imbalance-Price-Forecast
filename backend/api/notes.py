@@ -13,7 +13,7 @@ import pandas as pd
 
 from backend.api.schemas import Note
 from imbalance.contract import STEP
-from imbalance.events import CHECKS, EVENT_BY_ID, WINDOW_LABELS, WINDOWS
+from imbalance.events import CHECKS, EVENT_BY_ID, PERSONAS, WINDOW_LABELS, WINDOWS
 
 WINDOW_ORDER = {w: i for i, w in enumerate(WINDOWS)}
 
@@ -35,14 +35,21 @@ def parse_thresholds(text: str | None) -> dict[str, float]:
     return out
 
 
-def build_notes(probs: pd.DataFrame, persona: str, origin: pd.Timestamp, low_skill: frozenset[str] = frozenset(),
+def check_for(persona: str | None, event: str) -> str:
+    """The persona's check; without a persona, the first persona's check for that event."""
+    if persona is not None:
+        return CHECKS[(persona, event)]
+    return next(CHECKS[(p, event)] for p in PERSONAS if (p, event) in CHECKS)
+
+
+def build_notes(probs: pd.DataFrame, persona: str | None, origin: pd.Timestamp, low_skill: frozenset[str] = frozenset(),
                 thresholds: dict[str, float] | None = None, include_low_skill: bool = False) -> list[Note]:
-    """Notes for one origin: firing notes first, then soonest window, then the largest lift."""
+    """Notes for one origin (every event if persona is None): firing notes first, then soonest window, then the largest lift."""
     thresholds = thresholds or {}
     notes = []
     for row in probs.itertuples(index=False):
         event = EVENT_BY_ID.get(row.event)
-        if event is None or persona not in event.personas:
+        if event is None or (persona is not None and persona not in event.personas):
             continue
         weak = row.event in low_skill
         if weak and not include_low_skill:
@@ -58,5 +65,5 @@ def build_notes(probs: pd.DataFrame, persona: str, origin: pd.Timestamp, low_ski
             lift=round(float(row.lift), 2), threshold=threshold, fires=bool(row.p >= threshold),
             confidence=row.confidence, low_skill=weak,
             drivers=[d for d in str(row.drivers or "").split(";") if d],
-            check=CHECKS[(persona, row.event)]))
+            check=check_for(persona, row.event)))
     return sorted(notes, key=lambda n: (not n.fires, WINDOW_ORDER[n.window], -n.lift))
