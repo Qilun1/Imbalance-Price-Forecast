@@ -90,7 +90,7 @@ def write_probs(df: pd.DataFrame, path: Path = INFER_DB) -> int:
 
 def read_probs(model: str, origins: pd.DatetimeIndex | None = None, path: Path = INFER_DB) -> pd.DataFrame:
     with forecasts.connect(path, read_only=True) as con:
-        exists = con.execute("SELECT count(*) FROM information_schema.tables WHERE table_name = 'event_probs'").fetchone()[0]
+        exists = con.execute("SELECT count(*) FROM information_schema.tables WHERE table_name = 'event_probs'").fetchall()[0][0]
         if not exists:
             return pd.DataFrame(columns=COLS)
         q = 'SELECT model, forecast_origin_utc, "window", event, p, p_lo, p_hi, base_rate, lift, threshold, ' \
