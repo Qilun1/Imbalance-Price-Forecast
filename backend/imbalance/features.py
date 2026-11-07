@@ -16,8 +16,8 @@ from . import store as db
 from .contract import HORIZON_STEPS as HORIZON, SPIKE_MARGIN, STEP  # noqa: F401
 
 FEATURE_SET = "v1"                 # default feature set
-FEATURE_SETS = ("v1", "v2", "v2p", "v3", "v4", "v4m", "v5", "v5m")   # v2+ = v1 + vintaged NWP proxies; model per set in nwp.NWP_SPECS
-WIND_OBS_SETS = {"v4", "v4m", "v5", "v5m"}     # + observed wind error vs Fingrid day-ahead forecast (Fingrid 75 vs 246)
+FEATURE_SETS = ("v1", "v2", "v2p", "v3", "v4", "v4m", "v5", "v5m", "v6", "v6m")   # v2+ = v1 + vintaged NWP proxies; model per set in nwp.NWP_SPECS
+WIND_OBS_SETS = {"v4", "v4m", "v5", "v5m", "v6", "v6m"}     # + observed wind error vs Fingrid day-ahead forecast (Fingrid 75 vs 246)
 HIST_SETS = {"v5", "v5m"}         # + out-of-sample long-history direction head (tools/training/hist_heads.py)
 WIND_ERR_TAUS_H = (1, 3, 6)       # decay time constants (h) of the observed error with lead time
 
@@ -86,7 +86,7 @@ def lag_window(store: Store, sid: str, last: np.ndarray, o: np.ndarray, k: int) 
 
 
 def build(store: Store, origins: pd.DatetimeIndex, with_targets: bool, nwp: tuple | None = None,
-          wind_obs: bool = False, hist: pd.DataFrame | None = None) -> pd.DataFrame:
+          wind_obs: bool = False, hist: pd.DataFrame | None = None, nwp2=None) -> pd.DataFrame:
     """Feature rows for (origin, step). nwp = (wind RunTable, temp RunTable) adds the v2 weather columns;
     wind_obs adds the observed wind-error columns (v4)."""
     import warnings
@@ -95,6 +95,8 @@ def build(store: Store, origins: pd.DatetimeIndex, with_targets: bool, nwp: tupl
         df = _build(store, origins, with_targets)
         if nwp is not None:
             df = add_nwp(df, *nwp)
+        if nwp2 is not None:
+            df = add_nwp_spread(df, nwp2)
         if wind_obs:
             df = add_wind_obs(df, store)
         if hist is not None:
@@ -298,6 +300,31 @@ def _build(store: Store, origins: pd.DatetimeIndex, with_targets: bool) -> pd.Da
     return df
 
 
+def add_nwp_spread(df: pd.DataFrame, wind2) -> pd.DataFrame:
+    """v6: weather-uncertainty proxies from a second, independent NWP model (newest usable run).
+    Needs add_nwp first. Disagreement between ECMWF, MET Nordic and Fingrid's day-ahead wind forecast
+    tells the quantile heads when the wind (and so the imbalance) is hard to predict."""
+    o = df["forecast_origin_utc"].dt.as_unit("ns").astype("int64").to_numpy()
+    d = df["delivery_start_utc"].dt.as_unit("ns").astype("int64").to_numpy()
+    out = df.copy()
+    r = wind2.latest(o)
+    mw2 = wind2.at(r, o, d)
+    mw1, fc = out["nwp_wind_mw"].to_numpy(float), out["wind_fc"].to_numpy(float)
+    out["nwp2_wind_mw"] = mw2
+    out["nwp_models_diff"] = mw1 - mw2
+    out["nwp_models_absdiff"] = np.abs(mw1 - mw2)
+    three = np.column_stack([mw1, mw2, fc])
+    out["wind_fc_spread3"] = np.nanmax(three, axis=1) - np.nanmin(three, axis=1)
+    # relative to the wind level: large MW gaps at high wind are common and harmless (calm down-regulation)
+    out["wind_fc_spread3_rel"] = out["wind_fc_spread3"] / (np.nanmean(three, axis=1) + 500.0)
+    out["nwp2_minus_fingrid_fc"] = mw2 - fc
+    out["nwp2_run_change_abs"] = np.abs(mw2 - wind2.at(r - 1, o, d))
+    out["nwp_run_change_abs"] = np.abs(out["nwp_wind_run_change"].to_numpy(float))
+    # horizon-mean disagreement (same for all 40 steps of an origin): regime-level uncertainty
+    out["nwp_models_absdiff_hmean"] = out.groupby("forecast_origin_utc")["nwp_models_absdiff"].transform("mean")
+    return out
+
+
 FEATURES_EXCLUDE = {"forecast_origin_utc", "delivery_start_utc", "y_price", "y_spread", "y_dir",
                     "y_target_fu", "data_cutoff_utc"}
 
@@ -336,6 +363,11 @@ def build_table(origins: pd.DatetimeIndex | None = None, with_targets: bool = Tr
         first = (st.grid[0] + pd.Timedelta(hours=27)).ceil("h")
         last = (st.grid[-1] - pd.Timedelta(hours=9, minutes=45)).floor("h")
         origins = pd.date_range(first, last, freq="h")
+    nwp2 = None
+    if nwp_tables is not None and feature_set in nwp.NWP_SECOND:
+        nwp2 = nwp.load_second(feature_set)
+        if nwp2 is None:
+            raise RuntimeError(f"feature set {feature_set} needs {nwp.NWP_SECOND[feature_set]} wind runs")
     return build(st, pd.DatetimeIndex(origins), with_targets=with_targets, nwp=nwp_tables,
                  wind_obs=feature_set in WIND_OBS_SETS,
-                 hist=load_hist() if feature_set in HIST_SETS else None)
+                 hist=load_hist() if feature_set in HIST_SETS else None, nwp2=nwp2)

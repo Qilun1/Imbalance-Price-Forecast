@@ -9,6 +9,7 @@ The shift is fitted on VALIDATION rows only (AGENTS.md rule 4: never on the test
 
     # held-out check (leave one validation week out) and fit on all validation:
     uv run python -m tools.eval.spike_shift --model ens_v4s_v4ms
+    # (also writes <model>_spk-val_val.csv, the held-out validation version, for score.py)
     # apply the fitted shift to the test submission and run the organiser's validator:
     uv run python -m tools.eval.spike_shift --model ens_v4s_v4ms --apply
 """
@@ -75,6 +76,13 @@ def main() -> None:
     for w in sorted(week.unique()):
         held.append(apply_shift(d[week == w], _fit(d[week != w])))
     held = pd.concat(held).sort_index()
+    # honest validation version of the submission: every week shifted by a fit on the other weeks
+    # (rows without actuals keep their raw value; they are not scored)
+    val = pd.read_csv(WORK / "submissions" / f"{a.model}-val_val.csv", dtype=str, keep_default_na=False)
+    assert len(val) == len(df)
+    for c in ("p_spike_high", "p_spike_low"):
+        val.loc[held.index, c] = held[c].map(lambda v: f"{v:.6f}")
+    val.to_csv(WORK / "submissions" / f"{a.model}_spk-val_val.csv", index=False, encoding="utf-8", lineterminator="\n")
     raw, cv = score.compute_metrics(d, MARGIN), score.compute_metrics(held, MARGIN)
     print(f"{a.model}: spike shift, leave-one-validation-week-out ({week.nunique()} weeks; diagnostic)")
     for k in ("brier_spike_high", "brier_spike_low", "brier_spike_mean"):

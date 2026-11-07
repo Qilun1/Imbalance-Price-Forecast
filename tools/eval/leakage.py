@@ -19,13 +19,14 @@ from imbalance.features import HIST_SETS, WIND_OBS_SETS, load_hist
 def rebuild(feature_set: str, long: pd.DataFrame, o: pd.Timestamp) -> pd.DataFrame:
     """Feature rows of origin o, built from data that physically excludes every row not usable at o."""
     visible = long[long["first_usable_origin_utc"] <= o]
-    nwp_tables = None
+    nwp_tables = nwp2 = None
     if feature_set != "v1":
         from imbalance import nwp
         nwp_tables = nwp.load_for(feature_set, visible_before=o)          # runs not yet usable are physically removed
+        nwp2 = nwp.load_second(feature_set, visible_before=o)              # second model, same removal
     return build(Store(visible), pd.DatetimeIndex([o]), with_targets=False, nwp=nwp_tables,
                  wind_obs=feature_set in WIND_OBS_SETS,
-                 hist=load_hist() if feature_set in HIST_SETS else None)   # its own check: hist_heads --check
+                 hist=load_hist() if feature_set in HIST_SETS else None, nwp2=nwp2)   # its own check: hist_heads --check
 
 
 def check(feature_set: str = "v1", n: int = 60, seed: int = 0, origins: pd.DatetimeIndex | None = None) -> bool:

@@ -46,10 +46,43 @@ API keys live only in `.env` (gitignored) or in environment variables of the sam
 `.env.example` for which sources need a key and where to get one. `ENTSOE_API_TOKEN` is not needed:
 the ENTSO-E data comes ready-made in the starter package.
 
-Put the starter package data files (`inputs.parquet`, `inputs.csv`, `spot_nordpool.csv`,
-`actuals_validation.csv`, `quality_report.*`) into `static_data/raw/starter/`.
+The starter package data files (`inputs.parquet`, `inputs.csv`, `spot_nordpool.csv`,
+`actuals_validation.csv`, `quality_report.*`) go to `static_data/raw/starter/`: `ingest starter --src`
+copies them there (see below).
 
-## Since AI Hackathon 2026 - Turku Energia challenge
+## Reproduce the submission
+
+Needs `FINGRID_API_KEY` in `.env` and internet access (Fingrid, Open-Meteo, OpenStreetMap). The
+Open-Meteo pulls use the free tier and resume from their cache if a daily limit is hit.
+
+```bash
+# 1. Data: organiser package, wind sites, NWP locations, Fingrid measured wind, NWP runs
+uv run python -m tools.cli ingest starter --src <path to starter_package_v1 or its data folder>
+uv run python -m tools.cli ingest windsites
+uv run python -m tools.cli ingest locations
+uv run python -m tools.cli ingest fingrid --datasets 75 --start 2026-05-31 --end 2026-11-02T07:00
+uv run python -m tools.cli ingest openmeteo --models ecmwf_ifs --group wind
+uv run python -m tools.cli ingest openmeteo --models metno_nordic --group wind
+uv run python -m tools.cli ingest openmeteo --models metno_nordic --group pop
+# 2. The two members: features, train (val + final), score, test export, leakage check
+uv run python -m tools.cli pipeline --config tools/training/configs/lgbm_v4s.yaml --set v4
+uv run python -m tools.cli pipeline --config tools/training/configs/lgbm_v4ms.yaml --set v4m
+# 3. Average them, then apply the validation-fitted spike shift
+uv run python -m tools.eval.ensemble --name ens_v4s_v4ms --members lgbm_v4s lgbm_v4ms --period val
+uv run python -m tools.eval.ensemble --name ens_v4s_v4ms --members lgbm_v4s lgbm_v4ms --period test
+uv run python -m tools.eval.spike_shift --model ens_v4s_v4ms --apply
+```
+
+The submission is `static_data/work/submissions/ens_v4s_v4ms_spk_test.csv` (submit it as
+`forecast_backtest.csv`); every step runs the organiser's validator or scorer. More commands:
+`tools/README.md`. Dashboard: `backend/api/README.md` (API, runs on mock data without licensed files)
+and `frontend/README.md`. Data sources and licences: `docs/SOURCES_AND_LICENCES.md`.
+
+## About the challenge (organiser's notes)
+
+The files listed below are the organiser's downloads; they are not in this repository.
+
+### Since AI Hackathon 2026 - Turku Energia challenge
 
 Imbalance price forecast, 10 hours ahead
 
