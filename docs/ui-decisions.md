@@ -141,11 +141,12 @@ The prompt ranks above `DESIGN.md`, which ranks above skills.
   under the imbalance lines, past and the day-ahead prices published for the
   forecast hours, with "Spot" in the readout. Tried first as a separate chart below the fold, then as a
   second chart in the same box; the team wanted one chart.
-- **Price history table sits in the "What to check now" box**, under the situations, team decision, 7 Nov.
+- **Price history table sits in the "What to check now" box**, above the situations (swapped from under
+  them the same day), team decision, 7 Nov.
   Per period (1 day, 1 week, 1 month, 3 months, all data): spot high and low, imbalance high and low, over
   quarter-hours before the viewing time, in whole euros; hovering a price gives its exact value and time.
   The four price columns are equal and centred, so the Spot and Imbalance group names, each underlined,
-  sit midway over their High and Low. The situations scroll above it. To fit it, the default split moved
+  sit midway over their High and Low. The situations scroll below it. To fit it, the default split moved
   from 72/28 to 66/34 (storage id `now-across-v3`), the chart note dropped "times in UTC", and the key
   figures hide their "/MWh" suffix when the strip is under 672 px so five still fit in one row. A spot
   change % column was tried and removed the same day.
@@ -153,7 +154,7 @@ The prompt ranks above `DESIGN.md`, which ranks above skills.
   same quiet strip as the key figures (`StatStrip`, short labels with the full metric name on hover, "53%
   better" against the baseline, said once in the strip's title), then Forecast vs actual with the Now chart's
   series, names and colours: Actual (ink with a fade), Spot (`--color-chart-spot`, from `/api/actuals` for
-  the same window), Forecast (gold) and Likely range (band); the dashed baseline line was dropped as too
+  the same window), Forecast (gold) and Prediction interval (band); the dashed baseline line was dropped as too
   busy, the baseline lives on in the strip. Previous day / week / month is a full-width row under it. Right (34 %, resizable): Situations raised as a full-height box, each situation
   a two-line item (level, title, outcome; first raised, window, updates), virtualised past 100, with the
   official validation scores at its foot. The box header says only how many were raised; the judged count
@@ -163,6 +164,26 @@ The prompt ranks above `DESIGN.md`, which ranks above skills.
   after Shift+← carried the old time while the Now screen was still re-rendering its month of history.
 - **Softer box edges**, team decision, 7 Nov: `--color-hairline-soft` `#ece7df` on panels, KPI cards and the
   strip, and unselected situation cards. Decorative, so no contrast minimum; tables and inputs keep theirs.
+- **The Next 10 hours table has one row height**, team decision, 7 Nov: 40 px (`--spacing-row-comfortable`).
+  The compact / comfortable toggle in the box header and its saved setting were removed, as was the 32 px
+  token. This drops the prompt's density toggle. Sorting and column resizing stay.
+- **Balancing direction is back under the price chart**, team decision, 7 Nov, reversing the one plain pane
+  above. A separate Balancing & Risk screen, then a price risk pane under the chart, were tried and removed
+  the same day; risk stays in the situations and the Next 10 h table. Direction is a lower pane of the Now
+  chart, not a box of its own, so the Forecast line, the selected situation's shading, the crosshair,
+  dragging and the History row hold for both panes. The price pane is twice its height. After the Forecast
+  line it shows the forecast's chances; before it a pale full-height block is what happened. Changes from
+  the pane first removed: up and down are drawn separately, not as their difference, so the axis reads the
+  same numbers as the Next 10 h table, and the axis shows whole percent.
+- **The chart readout is a filled band**, team decision, 7 Nov, as the names and numbers above the chart
+  were hard to see: `Readout` (`bg-fill`, the highlighted panel title's look), 14 px ink text, semibold
+  values, larger swatches. Now holds two rows (prices, then direction with what happened),
+  Hindsight the prices. Values reserve the width of the widest realistic number and the time is the short
+  "23 Oct 09:00", so the crosshair never rewraps the band and resizes the chart; it is two rows at 1440 px.
+- **"Prediction interval (80%)" replaces "likely range"**, team decision, 7 Nov, everywhere the P10–P90 band
+  is named: the chart notes and readouts of Now and Hindsight and the Next hour figure, which puts the
+  name and the numbers on two lines, as one line cut off the numbers. "Confidence interval" was used
+  briefly; it is the wrong term for the spread of an outcome rather than of an estimate.
 - **Exposure check** moved from a side panel into a sheet. The panel pushed three table columns off screen at
   1440 px, and the quarter-hour table is what the demo must show.
 - **Sidebar** drops to the icon rail below 1024 px, so 768 px keeps its width for data.
@@ -185,7 +206,7 @@ The prompt ranks above `DESIGN.md`, which ranks above skills.
   `--color-error-bg`, Watch is `--color-warning` on `--color-warning-bg`, which moved from `#f6ecd2` to
   `#fde9a0` because the old value read as tan on the cream theme. The `--color-up` red is not used: it means
   a rising price. Each badge keeps its icon and word, so colour is never the only signal. The chart's shade
-  for the selected situation follows the level, as a see-through tint: an opaque fill hid the likely range
+  for the selected situation follows the level, as a see-through tint: an opaque fill hid the prediction interval
   drawn under it.
 - **Highlighted titles**, team decision, 7 Nov. "What to check now", "Situations raised" and "Official
   validation scores" use `PanelHeader highlight`: 16 px ink on a `--color-fill` band (14.76). The band is
