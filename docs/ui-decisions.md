@@ -113,8 +113,56 @@ The prompt ranks above `DESIGN.md`, which ranks above skills.
 - **`components/trading` and `lib/realtime`** keep the prompt's names. `lib/realtime` holds the connection
   status, viewing time and replay clock.
 - **Chart colours** are read from CSS variables at runtime, because a canvas cannot use Tailwind classes.
-- **Lower chart panes** use a fixed scale of -100% to 100%, each with its own axis, so nothing shares a dual
-  axis and a 5% risk looks small next to a 60% one.
+- **Forecast chart is one plain pane**, team decision, 7 Nov, after a Nordnet chart showed how much clearer a
+  single line reads. It holds the actual price (dark line, soft fade under it), the P50 forecast (gold) and
+  the P10–P90 range as a light band, with straight lines, not steps. Gone: the risk and direction panes, the
+  spot line, the grey spot ± 50 zone, vertical grid lines, day lines and axis decimals. Only the selected
+  situation's window is shaded. Risk stays in the situations and the Next 10 h table, direction also in the
+  KPI row.
+- **KPI row is one strip**, team decision, 7 Nov, styled after a Nordnet quote line: a muted label, a plain
+  semibold number and one line of context, with no card per figure. Prices read in euros, as "€63.9 /MWh".
+  High and low price risk gave way to the highest and lowest P50 in the next 10 hours, with their times. The
+  largest revision takes the up colour when positive and the down colour when negative. Hindsight keeps its
+  cards. On wide screens the strip sits above the chart in the left column, matching its edges, so the
+  situations run full height on the right. Its columns follow its own width (container query), five from
+  672 px. The chart keeps its time range on resize (`lockVisibleTimeRangeOnResize`), as the narrower column
+  otherwise cut off the forecast's end.
+- **Imbalance price and forecast chart scrolls through history**, team decision, 7 Nov, after Nordnet's
+  period row. It loads every row usable at the viewing time since the data starts (31 May), the same request
+  as the price history table. A row under the chart (1 day, 3 days, 1 week, 1 month, 3 months, All; the
+  buttons share the box's full width, `Choice fill`) sets how much history is in view; drag, a sideways swipe or the wheel (zoom) reaches the rest. It always shows
+  quarter-hours: a 15 min / 1 hour / 2 hours density menu was tried and removed the same day. Axis ticks
+  take the date from the chart's own day-change marks, not exact midnight.
+- **The chart header stays one row** (`PanelHeader oneRow`): the note never changes and shortens with an
+  ellipsis when space runs out, so "Show what happened" keeps its place. With it on, the readout row says
+  the black line after "Forecast" was not known then.
+- **Spot is a line in the imbalance price and forecast chart**, team decision, 7 Nov: Nord Pool spot as a
+  2 px `--color-chart-spot` `#7c3aed` line (5.7:1 on white; the muted `--color-series-5` read too light),
+  under the imbalance lines, past and the day-ahead prices published for the
+  forecast hours, with "Spot" in the readout. Tried first as a separate chart below the fold, then as a
+  second chart in the same box; the team wanted one chart.
+- **Price history table sits in the "What to check now" box**, under the situations, team decision, 7 Nov.
+  Per period (1 day, 1 week, 1 month, 3 months, all data): spot high and low, imbalance high and low, over
+  quarter-hours before the viewing time, in whole euros; hovering a price gives its exact value and time.
+  The four price columns are equal and centred, so the Spot and Imbalance group names, each underlined,
+  sit midway over their High and Low. The situations scroll above it. To fit it, the default split moved
+  from 72/28 to 66/34 (storage id `now-across-v3`), the chart note dropped "times in UTC", and the key
+  figures hide their "/MWh" suffix when the strip is under 672 px so five still fit in one row. A spot
+  change % column was tried and removed the same day.
+- **Hindsight follows the Now layout**, team decision, 7 Nov. Left (66 %): the diagnostic scores as the
+  same quiet strip as the key figures (`StatStrip`, short labels with the full metric name on hover, "53%
+  better" against the baseline, said once in the caption), then Forecast vs actual with the Now chart's
+  series, names and colours: Actual (ink with a fade), Spot (`--color-chart-spot`, from `/api/actuals` for
+  the same window), Forecast (gold) and Likely range (band); the dashed baseline line was dropped as too
+  busy, the baseline lives on in the strip. Previous day / week / month is a full-width row under it. Right (34 %, resizable): Situations raised as a full-height box, each situation
+  a two-line item (level, title, outcome; first raised, window, updates), virtualised past 100, with the
+  official validation scores at its foot. The box header says only how many were raised; the judged count
+  and the score.py source note were removed, team decision. The six-column log table needed about 920 px and did not fit a
+  side box. The screen title is a screen-reader-only h1, as the sidebar names the screen.
+- **Screen links read the address when used** (`useScreenHref`), not the last render: pressing `2` right
+  after Shift+← carried the old time while the Now screen was still re-rendering its month of history.
+- **Softer box edges**, team decision, 7 Nov: `--color-hairline-soft` `#ece7df` on panels, KPI cards and the
+  strip, and unselected situation cards. Decorative, so no contrast minimum; tables and inputs keep theirs.
 - **Exposure check** moved from a side panel into a sheet. The panel pushed three table columns off screen at
   1440 px, and the quarter-hour table is what the demo must show.
 - **Sidebar** drops to the icon rail below 1024 px, so 768 px keeps its width for data.
@@ -125,9 +173,6 @@ The prompt ranks above `DESIGN.md`, which ranks above skills.
 - **Past views** carry no notice, team decision, 7 Nov.
 - **UTC:** everything that names the viewing time reads UTC, team decision, 7 Nov: the Ctrl K jumps. Page
   content, including tables and chart axes, stays in Helsinki time.
-- **Situation log** has its own row below 1792 px (`--breakpoint-3xl`), with Official scores under it. Its six
-  columns need about 920 px to show whole titles, and truncating them hid what each situation was. Below that
-  width, as at 768 px, the table scrolls sideways rather than cut a title.
 - **Now screen** drops the Main factors and Largest changes panels, team decision, 7 Nov. The forecast chart
   takes their space. Main factors stay in the Next 10 h table and the situation sheet, and the largest
   revision stays in the KPI row.
