@@ -112,7 +112,12 @@ NWP_SPECS = {"v2": ("ecmwf_ifs", "wind"),
              "v4": ("ecmwf_ifs", "wind"),       # v2 + observed wind error (features.WIND_OBS_SETS)
              "v4m": ("metno_nordic", "pop"),    # v3 + observed wind error
              "v5": ("ecmwf_ifs", "wind"),       # v4 + long-history direction head
-             "v5m": ("metno_nordic", "pop")}    # v4m + long-history direction head
+             "v5m": ("metno_nordic", "pop"),    # v4m + long-history direction head
+             "v6": ("ecmwf_ifs", "wind"),       # v4 + second NWP model and forecast disagreement
+             "v6m": ("metno_nordic", "pop")}    # v4m + second NWP model and forecast disagreement
+
+# feature set -> the OTHER NWP model, used only for its wind (disagreement = weather uncertainty proxy)
+NWP_SECOND = {"v6": "metno_nordic", "v6m": "ecmwf_ifs"}
 
 
 def load(visible_before=None, temp_group: str = "wind",
@@ -136,3 +141,11 @@ def load(visible_before=None, temp_group: str = "wind",
 def load_for(feature_set: str, visible_before=None):
     model, temp_group = NWP_SPECS[feature_set]
     return load(visible_before=visible_before, temp_group=temp_group, model=model)
+
+
+def load_second(feature_set: str, visible_before=None) -> RunTable | None:
+    """Wind RunTable of the second NWP model for feature sets in NWP_SECOND (else None). Same
+    availability rule: each run is usable from its own first_usable_origin_utc."""
+    if feature_set not in NWP_SECOND:
+        return None
+    return load(visible_before=visible_before, temp_group="wind", model=NWP_SECOND[feature_set])[0]
