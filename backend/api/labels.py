@@ -84,6 +84,15 @@ LABELS: dict[str, str] = {
     "wind_err_decay_6h": "Wind error carried forward (slow fade)",
     "wind_fc_corrected": "Wind forecast corrected by the latest error",
     "resid_load_corrected": "Residual load corrected by the latest wind error",
+    "nwp2_wind_mw": "Wind power from the second weather model",
+    "nwp_models_diff": "Wind difference between the two weather models",
+    "nwp_models_absdiff": "Disagreement between the two weather models",
+    "wind_fc_spread3": "Spread of the three wind forecasts",
+    "wind_fc_spread3_rel": "Spread of the three wind forecasts relative to wind level",
+    "nwp2_minus_fingrid_fc": "Second weather model minus Fingrid wind forecast",
+    "nwp2_run_change_abs": "Second weather model change since its previous run",
+    "nwp_run_change_abs": "Size of the wind change since the previous weather run",
+    "nwp_models_absdiff_hmean": "Weather-model disagreement over the next 10 hours",
     "hist_p_up": "Up-regulation chance from 1.5 years of history",
 }
 
