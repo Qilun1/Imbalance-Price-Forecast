@@ -20,7 +20,7 @@ import pandas as pd
 from imbalance import forecasts, store
 from imbalance.contract import DIRECTION_SERIES, FORECAST_COLUMNS, HORIZON_STEPS, STEP, TARGET_SERIES
 
-from backend.api.settings import MOCK_BASELINE, MOCK_DB, MOCK_MODEL
+from backend.api.settings import MOCK_BASELINE, MOCK_CHALLENGER, MOCK_DB, MOCK_MODEL
 
 SEED = 20261107
 FIRST_ORIGIN = pd.Timestamp("2026-10-21T21:00:00Z")   # 22 Oct 00:00 Helsinki
@@ -176,6 +176,25 @@ def _model_rows(grid: pd.DatetimeIndex, level: np.ndarray, price: np.ndarray, rn
     })
 
 
+def _challenger_rows(model: pd.DataFrame, rng: np.random.Generator) -> pd.DataFrame:
+    """A second model on different input data: close to the main one, apart from the scripted conflict,
+    where it sees up-regulation and no high-price risk while the main model sees the opposite."""
+    out = model.copy()
+    shift = rng.normal(0.0, 3.0, len(out))
+    for column in ("p10", "p50", "p90"):
+        out[column] += shift
+    p_none = out["p_none"].to_numpy()
+    p_up = np.clip(out["p_up"].to_numpy() + rng.normal(0.0, 0.03, len(out)), 0.0, 1.0 - p_none)
+    high = out["p_spike_high"].to_numpy().copy()
+    s = _BY_NAME["conflicting_signals"]
+    conflict = ((out["forecast_origin_utc"] >= s.as_of) & (out["delivery_start_utc"] >= s.delivery_from)
+                & (out["delivery_start_utc"] < s.delivery_to)).to_numpy()
+    p_up[conflict] = 0.70
+    high[conflict] = 0.05
+    out["p_up"], out["p_down"], out["p_spike_high"] = p_up, 1.0 - p_up - p_none, high
+    return out
+
+
 def _baseline_rows(grid: pd.DatetimeIndex, price: np.ndarray) -> pd.DataFrame:
     """A persistence reference in the spirit of the organiser's baseline, on invented prices."""
     origins = pd.date_range(FIRST_ORIGIN, periods=N_ORIGINS, freq="h")
@@ -221,12 +240,14 @@ def generate(path: Path = MOCK_DB) -> Path:
     level, price, direction = _actual_series(grid, rng)
     model = _model_rows(grid, level, price, rng)
     baseline = _baseline_rows(grid, price)
-    check_rows(model)
-    check_rows(baseline)
+    challenger = _challenger_rows(model, rng)       # drawn last, so the main model's rows do not change
+    for rows in (model, baseline, challenger):
+        check_rows(rows)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.unlink(missing_ok=True)
     forecasts.write(MOCK_MODEL, model, path)
     forecasts.write(MOCK_BASELINE, baseline, path)
+    forecasts.write(MOCK_CHALLENGER, challenger, path)
     store.insert_observations(_observation_rows(grid, price, direction), "mock", path)
     return path
 

@@ -12,10 +12,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.api import mock
+from backend.api.alerts import build_alerts
 from backend.api.labels import LABELS, label_for
 from backend.api.main import app
 from backend.api.repository import DISPLAY_SERIES, Repository, get_repository
-from backend.api.settings import MOCK_BASELINE, MOCK_MODEL, Period, Settings
+from backend.api.settings import MOCK_BASELINE, MOCK_CHALLENGER, MOCK_MODEL, Period, Settings
 from imbalance.contract import SPOT_SERIES, TEST_FIRST_ORIGIN, VALIDATION_FIRST_ORIGIN
 from imbalance.paths import ARTIFACTS_DIR, INFER_DB, STATIC_DB
 
@@ -25,7 +26,7 @@ SCENARIO = {s.name: s for s in mock.SCENARIOS}
 @pytest.fixture(scope="module")
 def repo(tmp_path_factory):
     path = mock.generate(tmp_path_factory.mktemp("mock") / "mock.duckdb")
-    return Repository(Settings("mock", (Period("mock", MOCK_MODEL, MOCK_BASELINE),), path, path))
+    return Repository(Settings("mock", (Period("mock", MOCK_MODEL, MOCK_BASELINE, challenger=MOCK_CHALLENGER),), path, path))
 
 
 @pytest.fixture()
@@ -53,6 +54,7 @@ def test_mock_is_repeatable_and_follows_the_rules(tmp_path, repo):
     assert np.array_equal(again.primary[numbers].to_numpy(), repo.primary[numbers].to_numpy())
     mock.check_rows(repo.primary)
     mock.check_rows(repo.baseline)
+    mock.check_rows(repo.challenger)
 
 
 def test_spot_is_never_loaded(repo):
@@ -124,6 +126,21 @@ def test_first_forecast_has_nothing_to_compare_with(client):
 def test_each_scripted_situation_raises_its_alert(client, scenario, kind):
     body = client.get("/api/alerts", params={"as_of": iso(SCENARIO[scenario].as_of)}).json()
     assert kind in {a["kind"] for a in body["alerts"]}
+
+
+def test_conflict_means_an_independent_model_disagrees(client, repo):
+    as_of = SCENARIO["conflicting_signals"].as_of
+    body = client.get("/api/alerts", params={"as_of": iso(as_of)}).json()
+    alert = next(a for a in body["alerts"] if a["kind"] == "conflicting_signals")
+    assert "second model built on different input data" in alert["message"]
+    assert "regulation direction" in alert["message"] and alert["evidence"]["largest_direction_gap"] >= 0.30
+    current = repo.forecast(repo.origin_at(as_of))
+    assert not [a for a in build_alerts(current, None) if a.kind == "conflicting_signals"], "no second model, no conflict"
+    assert not [a for a in build_alerts(current, None, current) if a.kind == "conflicting_signals"], "a model agrees with itself"
+
+
+def test_meta_names_the_second_model(client):
+    assert client.get("/api/meta").json()["periods"][0]["challenger"] == MOCK_CHALLENGER
 
 
 def test_overlapping_risks_ask_for_an_expert_review(client):

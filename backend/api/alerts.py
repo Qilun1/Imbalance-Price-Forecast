@@ -8,8 +8,13 @@ to recognise when the error may be large.
 Alerts say what to check, never what to do. Open data cannot tell what capacity is free or what it
 costs, so the brief limits the first phase to suggestions to review.
 
-Thresholds were set on validation-period forecasts of lgbm_v1-val only, never on test data (AGENTS.md
-rule 4). They are rare by design: the percentages below are shares of validation rows or moves.
+Conflicting signals means independent sources disagree, as in the brief: the main forecast is compared
+with a second model built on different input data (lgbm_v2 adds ECMWF weather to lgbm_v1's Fingrid
+forecasts), made at the same origin. Comparing two outputs of the same model would not show that.
+
+Thresholds were set on validation-period forecasts of lgbm_v1-val (and lgbm_v2-val for the conflict
+gaps) only, never on test data (AGENTS.md rule 4). They are rare by design: the percentages below are
+shares of validation rows or moves.
 """
 from __future__ import annotations
 
@@ -40,8 +45,10 @@ class Thresholds:
     interval_width: float = 200.0       # EUR/MWh, top 5 % of P90 - P10 widths
     up_level: float = 0.70              # top 5 %
     down_level: float = 0.93            # top 5 %; down is the usual state, so the bar is high
-    conflict_direction: float = 0.25    # direction this unlikely, while ...
-    conflict_spike: float = 0.25        # ... the opposite spike is this likely: under 1 % of rows
+    conflict_p50_gap: float = 45.0      # EUR/MWh between the two models, top 1 % of rows
+    conflict_direction_gap: float = 0.30    # p_up apart and pointing different ways, top 1 %
+    conflict_spike_high_gap: float = 0.34   # top 1 %
+    conflict_spike_low_gap: float = 0.49    # top 1 %
     stale_minutes: int = 135            # one forecast hour later than normal
     min_quarters: int = 2               # ignore single quarter-hour flickers
     regulation_quarters: int = 4        # regulation must hold for an hour to be worth a note
@@ -157,18 +164,31 @@ def _uncertainty(cur: pd.DataFrame, th: Thresholds) -> list[Alert]:
     return out
 
 
-def _conflict(cur: pd.DataFrame, th: Thresholds) -> list[Alert]:
+def _conflict(cur: pd.DataFrame, other: pd.DataFrame | None, th: Thresholds) -> list[Alert]:
+    """Where the main forecast and the independent second model disagree on the same quarter-hours."""
+    if other is None:
+        return []
+    columns = ["p50", "p_up", "p_down", "p_spike_high", "p_spike_low"]
+    both = cur.merge(other[["delivery_start_utc", *columns]], on="delivery_start_utc", how="left",
+                     suffixes=("", "_other"))
+    gap = {c: (both[c] - both[f"{c}_other"]).abs().to_numpy() for c in columns}
+    ways_differ = np.sign(both["p_up"] - both["p_down"]) != np.sign(both["p_up_other"] - both["p_down_other"])
+    tests = (("the price level", gap["p50"] >= th.conflict_p50_gap),
+             ("the regulation direction", (gap["p_up"] >= th.conflict_direction_gap) & ways_differ.to_numpy()),
+             ("the risk of an exceptionally high price", gap["p_spike_high"] >= th.conflict_spike_high_gap),
+             ("the risk of an exceptionally low price", gap["p_spike_low"] >= th.conflict_spike_low_gap))
     out = []
-    pairs = (("p_up", "p_spike_high", "down-regulation", "a high price"),
-             ("p_down", "p_spike_low", "up-regulation", "a low price"))
-    for direction, spike, expected, risk in pairs:
-        mask = (cur[direction].to_numpy() <= th.conflict_direction) & (cur[spike].to_numpy() >= th.conflict_spike)
-        for a, b in _runs(mask, th.min_quarters):
-            rows = cur.iloc[a:b + 1]
-            out.append(_alert("conflicting_signals", rows, "Signals disagree",
-                              f"For {_span(rows)} the direction forecast points to {expected}, but the risk of {risk} is raised.",
-                              "the market situation by hand before relying on the forecast",
-                              {"peak_spike_probability": rows[spike].max(), "direction_probability": rows[direction].min()}))
+    for a, b in _runs(np.logical_or.reduce([hit for _, hit in tests]), th.min_quarters):
+        rows = both.iloc[a:b + 1]
+        topics = [topic for topic, hit in tests if hit[a:b + 1].any()]
+        listed = topics[0] if len(topics) == 1 else ", ".join(topics[:-1]) + " and " + topics[-1]
+        out.append(_alert("conflicting_signals", rows, "Models disagree",
+                          f"For {_span(rows)} the forecast and a second model built on different input data "
+                          f"disagree on {listed}.",
+                          "the market situation by hand before relying on the forecast",
+                          {"largest_p50_gap": np.nanmax(gap["p50"][a:b + 1]),
+                           "largest_direction_gap": np.nanmax(gap["p_up"][a:b + 1]),
+                           "largest_spike_gap": np.nanmax(np.maximum(gap["p_spike_high"], gap["p_spike_low"])[a:b + 1])}))
     return out
 
 
@@ -209,11 +229,14 @@ def _expert_reviews(cur: pd.DataFrame, alerts: list[Alert], th: Thresholds) -> l
     return out
 
 
-def build_alerts(current: pd.DataFrame, previous: pd.DataFrame | None, th: Thresholds = THRESHOLDS) -> list[Alert]:
-    """Alerts for one forecast, most serious and soonest first."""
+def build_alerts(current: pd.DataFrame, previous: pd.DataFrame | None, challenger: pd.DataFrame | None = None,
+                 th: Thresholds = THRESHOLDS) -> list[Alert]:
+    """Alerts for one forecast, most serious and soonest first. `challenger` is the independent second
+    model's forecast from the same origin; without it there is no conflicting-signals alert."""
     cur = _with_previous(current, previous)
     alerts = [*_spike(cur, "high", th.spike_high_rise, th.spike_high_level, th),
               *_spike(cur, "low", th.spike_low_rise, th.spike_low_level, th),
-              *_revision(cur, th), *_regulation(cur, th), *_uncertainty(cur, th), *_conflict(cur, th), *_stale(cur, th)]
+              *_revision(cur, th), *_regulation(cur, th), *_uncertainty(cur, th), *_conflict(cur, challenger, th),
+              *_stale(cur, th)]
     alerts += _expert_reviews(cur, alerts, th)
     return sorted(alerts, key=lambda a: (a.severity != "review", a.window_start_utc))

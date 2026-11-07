@@ -35,6 +35,9 @@ viewing time; if it is left out, the API uses the newest forecast.
   labelled as a diagnostic. Test-period diagnostics are for display only (AGENTS.md rule 4).
 - **Alerts:** they suggest what to check, never what to do. Thresholds in `alerts.py` were set on
   validation forecasts only; never tune them on test data.
+- **Conflicting signals:** independent sources must disagree, not two outputs of one model. The main
+  forecast is compared with a second model on different input data from the same origin
+  (`lgbm_v2`, which adds ECMWF weather; `IMBALANCE_CHALLENGER_VAL` / `_TEST`, `none` turns it off).
 
 Mock data lives in `backend/infer_data/mock_forecasts.duckdb` (gitignored). `mock.py` is invented from
 a seed, reads none of the organiser's files, and scripts one of each situation; see `SCENARIOS` there.

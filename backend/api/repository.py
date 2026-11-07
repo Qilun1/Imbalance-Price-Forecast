@@ -47,7 +47,9 @@ class Repository:
             names = [p.model for p in settings.periods]
             raise RuntimeError(f"no forecasts for {names} in {settings.forecast_db}")
         self.baseline = self._load("baseline")
+        self.challenger = self._load("challenger")
         self._primary_by_origin = dict(tuple(self.primary.groupby("forecast_origin_utc")))
+        self._challenger_by_origin = dict(tuple(self.challenger.groupby("forecast_origin_utc")))
         self.origins = pd.DatetimeIndex(sorted(self._primary_by_origin))
         self.observations = store.load_observations(list(DISPLAY_SERIES), settings.store_db)
 
@@ -56,6 +58,8 @@ class Repository:
         frames = []
         periods = self.settings.periods
         for i, period in enumerate(periods):
+            if getattr(period, role) is None:
+                continue
             df = forecasts.read(getattr(period, role), None, self.settings.forecast_db)
             if period.first_origin is not None:
                 df = df[df["forecast_origin_utc"] >= period.first_origin]
@@ -88,6 +92,14 @@ class Repository:
         if previous is None or previous["model"].iloc[0] != self._primary_by_origin[origin]["model"].iloc[0]:
             return None
         return previous.sort_values("step").reset_index(drop=True)
+
+    def challenger_forecast(self, origin: pd.Timestamp) -> pd.DataFrame | None:
+        """The second model's forecast made at the same origin, or None. Same origin means the same
+        data cutoff, so this adds no data the main forecast could not have used."""
+        rows = self._challenger_by_origin.get(origin)
+        if rows is None or rows["model"].iloc[0] == self._primary_by_origin[origin]["model"].iloc[0]:
+            return None
+        return rows.sort_values("step").reset_index(drop=True)
 
     # ---------- actuals ----------
     def actuals(self, as_of: pd.Timestamp, start: pd.Timestamp | None = None, end: pd.Timestamp | None = None) -> pd.DataFrame:

@@ -18,4 +18,4 @@ def get_alerts(as_of: AwareDatetime | None = Query(None, description="Viewing ti
     origin = repo.origin_at(moment)
     current = repo.forecast(origin)
     return Alerts(as_of_utc=moment, origin_utc=origin, model=current["model"].iloc[0],
-                  alerts=build_alerts(current, repo.previous_forecast(origin)))
+                  alerts=build_alerts(current, repo.previous_forecast(origin), repo.challenger_forecast(origin)))

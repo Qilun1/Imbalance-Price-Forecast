@@ -139,6 +139,7 @@ class PeriodInfo(BaseModel):
     name: str
     model: str
     baseline: str
+    challenger: str | None = None       # second model on different input data, for conflicting signals
     first_origin_utc: datetime | None
     last_origin_utc: datetime | None
     origins: int
