@@ -30,12 +30,12 @@ export const KIND_LABELS: Record<AlertKind, string> = {
 
 export function SeverityBadge({ severity }: { severity: Alert["severity"] }) {
   return severity === "review" ? (
-    <Badge variant="warning">
+    <Badge variant="error">
       <TriangleAlert aria-hidden />
       Review
     </Badge>
   ) : (
-    <Badge variant="info">
+    <Badge variant="warning">
       <Eye aria-hidden />
       Watch
     </Badge>
@@ -71,7 +71,7 @@ export function SituationsPanel() {
   const { alerts, selected } = useNow();
   return (
     <Panel label="What to check now" className="h-full">
-      <PanelHeader title="What to check now" level={1} note={alerts.length ? `${alerts.length} now` : undefined} />
+      <PanelHeader title="What to check now" level={1} highlight note={alerts.length ? `${alerts.length} now` : undefined} />
       <PanelBody className="px-0 pb-0">
         <QueryState
           query={query}

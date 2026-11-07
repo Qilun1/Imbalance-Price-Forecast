@@ -24,7 +24,7 @@ import {
   type LineData,
 } from "lightweight-charts";
 
-import type { ActualPoint, Forecast } from "@/lib/api/client";
+import type { ActualPoint, Alert, Forecast } from "@/lib/api/client";
 import { formatPriceAxis, fromUnixSeconds, toUnixSeconds } from "@/lib/format";
 import type { Direction } from "@/lib/forecast";
 
@@ -113,7 +113,7 @@ function band(rows: readonly ChartRow[], upper: (row: ChartRow) => number | null
   return points;
 }
 
-export type ChartWindow = { start: string; end: string; selected: boolean };
+export type ChartWindow = { start: string; end: string; selected: boolean; severity: Alert["severity"] };
 
 export type ChartInput = {
   rows: readonly ChartRow[];
@@ -205,13 +205,14 @@ export class ForecastView {
     this.outcome.setData(series(rows, (row) => row.outcome));
 
     // Only the situation picked on the right is shaded: overlapping windows stacked into a dark block.
-    const warning = color("warning");
+    // Red for Review and yellow for Watch, like the badges. Both stay see-through: the likely range is
+    // drawn underneath, and it is what the shaded window is about.
     const spans = windows
       .filter((window) => window.selected)
       .map((window) => ({
         from: toUnixSeconds(window.start) as UTCTimestamp,
         to: toUnixSeconds(window.end) as UTCTimestamp,
-        fill: withAlpha(warning, 0.07),
+        fill: window.severity === "review" ? withAlpha(color("error-text"), 0.12) : withAlpha(color("warning-bg"), 0.4),
       }));
     const axis = color("chart-axis");
     this.marks.set(spans, [

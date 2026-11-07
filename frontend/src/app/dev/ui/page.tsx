@@ -124,8 +124,9 @@ export default function DevUiPage() {
             Up
           </Badge>
           <Badge variant="down">Down</Badge>
-          <Badge variant="warning">Review</Badge>
-          <Badge variant="info">Watch</Badge>
+          <Badge variant="error">Review</Badge>
+          <Badge variant="warning">Watch</Badge>
+          <Badge variant="info">Info</Badge>
           <Badge variant="destructive">Error</Badge>
           <DirectionLabel direction="up" />
           <DirectionLabel direction="down" />

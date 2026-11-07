@@ -99,7 +99,7 @@ export function ForecastPanel() {
     () =>
       alerts
         .filter((alert) => alert.kind !== "stale_data")
-        .map((alert) => ({ ...windowOf(alert), selected: isSameSituation(alert, selected) })),
+        .map((alert) => ({ ...windowOf(alert), severity: alert.severity, selected: isSameSituation(alert, selected) })),
     [alerts, selected],
   );
 
