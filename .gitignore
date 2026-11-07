@@ -38,6 +38,10 @@ __pycache__/
 node_modules/
 frontend/dist/
 
+# Agent skills: upstream metadata, not read at runtime
+.agents/skills/*/metadata.json
+.claude/skills/*/metadata.json
+
 # OS
 .DS_Store
 Thumbs.db
