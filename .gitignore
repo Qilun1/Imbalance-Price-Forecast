@@ -38,9 +38,9 @@ __pycache__/
 node_modules/
 frontend/dist/
 
-# Agent skills: upstream metadata, not read at runtime
-.agents/skills/*/metadata.json
-.claude/skills/*/metadata.json
+# Agent skills: third-party, installed locally from skills-lock.json (sources and hashes), not committed
+.agents/skills/
+.claude/skills/
 
 # OS
 .DS_Store
