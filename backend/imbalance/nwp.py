@@ -68,7 +68,7 @@ class RunTable:
 
 
 def national_runs(runs: pd.DataFrame, capacity: pd.Series,
-                  temp_weights: pd.Series | None = None) -> tuple[RunTable | None, RunTable | None]:
+                  temp_weights: pd.Series | None = None, model: str = "ecmwf_ifs") -> tuple[RunTable | None, RunTable | None]:
     """Aggregate per-location runs to national wind MW and weighted temperature (population weights if
     given, else wind-capacity weights)."""
     if runs.empty:
@@ -78,18 +78,19 @@ def national_runs(runs: pd.DataFrame, capacity: pd.Series,
     runs["cap"] = runs["location_id"].map(capacity).astype(float)
     keys = ["run_init_utc", "first_usable_origin_utc", "valid_time_utc"]
     wind = temp = None
-    w = runs[runs["series_id"] == WIND_SERIES]
+    wind_series, temp_series = series_ids(model)
+    w = runs[runs["series_id"] == wind_series]
     if not w.empty:
         w = w.assign(mw=power_curve(w["value"].to_numpy(float)) * w["cap"])
         g = w.groupby(keys, as_index=False).agg(mw=("mw", "sum"), cap=("cap", "sum"))
         g = g[g["cap"] >= 0.8 * capacity.sum()]          # skip valid times with missing locations
         wind = RunTable(g, "mw")
     if temp_weights is not None and not temp_weights.empty:
-        t = all_runs[(all_runs["series_id"] == TEMP_SERIES) & all_runs["location_id"].isin(temp_weights.index)].copy()
+        t = all_runs[(all_runs["series_id"] == temp_series) & all_runs["location_id"].isin(temp_weights.index)].copy()
         t["cap"] = t["location_id"].map(temp_weights).astype(float)
         full = temp_weights.sum()
     else:
-        t = runs[runs["series_id"] == TEMP_SERIES]
+        t = runs[runs["series_id"] == temp_series]
         full = capacity.sum()
     if not t.empty:
         t = t.assign(wt=t["value"] * t["cap"])
@@ -100,10 +101,21 @@ def national_runs(runs: pd.DataFrame, capacity: pd.Series,
     return wind, temp
 
 
-def load(visible_before=None, temp_group: str = "wind") -> tuple[RunTable | None, RunTable | None]:
+def series_ids(model: str) -> tuple[str, str]:
+    return f"om_{model}_wind_speed_100m", f"om_{model}_temperature_2m"
+
+
+# feature set -> (NWP model, temperature weighting). v2 is kept unchanged for reproducibility.
+NWP_SPECS = {"v2": ("ecmwf_ifs", "wind"),
+             "v2p": ("ecmwf_ifs", "pop"),       # ECMWF wind + population-weighted temperature
+             "v3": ("metno_nordic", "pop")}     # MET Nordic (MEPS 2.5 km) wind + population-weighted temperature
+
+
+def load(visible_before=None, temp_group: str = "wind",
+         model: str = "ecmwf_ifs") -> tuple[RunTable | None, RunTable | None]:
     """Load national run tables from the store. `visible_before` (origin) drops later runs entirely
     (used by the leakage check)."""
-    runs = db.load_forecast_runs([WIND_SERIES, TEMP_SERIES])
+    runs = db.load_forecast_runs(list(series_ids(model)))
     if visible_before is not None and not runs.empty:
         runs = runs[runs["first_usable_origin_utc"] <= visible_before]
     if runs.empty:
@@ -112,4 +124,11 @@ def load(visible_before=None, temp_group: str = "wind") -> tuple[RunTable | None
     if capacity.empty:
         raise RuntimeError("no NWP locations registered: run `uv run python -m tools.cli ingest locations`")
     temp_w = db.locations("pop") if temp_group == "pop" else None
-    return national_runs(runs, capacity, temp_w)
+    if temp_w is not None and temp_w.empty:
+        raise RuntimeError("population locations not registered: run `uv run python -m tools.cli ingest locations`")
+    return national_runs(runs, capacity, temp_w, model)
+
+
+def load_for(feature_set: str, visible_before=None):
+    model, temp_group = NWP_SPECS[feature_set]
+    return load(visible_before=visible_before, temp_group=temp_group, model=model)

@@ -16,7 +16,7 @@ from . import store as db
 from .contract import HORIZON_STEPS as HORIZON, SPIKE_MARGIN, STEP  # noqa: F401
 
 FEATURE_SET = "v1"                 # default feature set
-FEATURE_SETS = ("v1", "v2")         # v2 = v1 + vintaged NWP weather proxies (backend/imbalance/nwp.py)
+FEATURE_SETS = ("v1", "v2", "v2p", "v3")   # v2+ = v1 + vintaged NWP proxies; model per set in nwp.NWP_SPECS
 
 LAG_SERIES = [
     "fi_imbalance_price", "fi_mfrr_direction", "fi_mfrr_up_price", "fi_mfrr_down_price",
@@ -258,11 +258,13 @@ def build_table(origins: pd.DatetimeIndex | None = None, with_targets: bool = Tr
         raise ValueError(f"unknown feature set {feature_set!r}; available {FEATURE_SETS}")
     st = load_store()
     nwp_tables = None
-    if feature_set == "v2":
+    if feature_set != "v1":
         from . import nwp
-        nwp_tables = nwp.load()
-        if nwp_tables == (None, None):
-            raise RuntimeError("feature set v2 needs NWP runs: run `uv run python -m tools.cli ingest openmeteo`")
+        nwp_tables = nwp.load_for(feature_set)
+        if nwp_tables[0] is None or nwp_tables[1] is None:
+            model, grp = nwp.NWP_SPECS[feature_set]
+            raise RuntimeError(f"feature set {feature_set} needs {model} runs for wind and {grp} sites: run "
+                               f"`uv run python -m tools.cli ingest openmeteo --models {model} --group ...`")
     if origins is None:
         first = (st.grid[0] + pd.Timedelta(hours=27)).ceil("h")
         last = (st.grid[-1] - pd.Timedelta(hours=9, minutes=45)).floor("h")

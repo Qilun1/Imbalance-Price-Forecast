@@ -1,0 +1,14 @@
+# v2p: v2 with population-weighted temperature (ECMWF IFS wind).
+name: lgbm_v2ps
+feature_set: v2p
+widen: 1.6            # same as v1 until re-tuned on validation
+regressor:
+  n_estimators: 150
+  learning_rate: 0.03
+  num_leaves: 31
+  min_child_samples: 200
+classifier:
+  n_estimators: 110
+  learning_rate: 0.03
+  num_leaves: 31
+  min_child_samples: 200

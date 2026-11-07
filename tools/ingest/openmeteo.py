@@ -29,14 +29,25 @@ URL = "https://single-runs-api.open-meteo.com/v1/forecast"
 MODELS = {
     # model id: (publication delay, run hours UTC)
     "ecmwf_ifs": (pd.Timedelta(hours=8), (0, 6, 12, 18)),
-    "metno_nordic": (pd.Timedelta(hours=4), (0, 6, 12, 18)),
+    "metno_nordic": (None, (0, 6, 12, 18)),   # delay NOT measured yet: ingest refuses until it is set
 }
 META_URL = "https://api.open-meteo.com/data/{model}/static/meta.json"
 
 
+META_NAMES = {"metno_nordic": ["metno_nordic_pp", "metno_nordic"]}   # Open-Meteo's internal data folder names
+
+
 def measure_delay(model: str = "ecmwf_ifs") -> pd.Timedelta:
     """Delay of the latest run as reported by Open-Meteo (availability - initialisation)."""
-    m = Client(min_interval_s=1.0).get_json(META_URL.format(model=model))
+    c, last = Client(min_interval_s=1.0), None
+    for name in META_NAMES.get(model, [model]):
+        try:
+            m = c.get_json(META_URL.format(model=name))
+            break
+        except Exception as e:          # try the next folder name
+            last = e
+    else:
+        raise RuntimeError(f"no meta.json for {model}: {last}")
     return pd.Timedelta(seconds=m["last_run_availability_time"] - m["last_run_initialisation_time"])
 DEFAULT_MODELS = ["ecmwf_ifs"]   # free tier: ~10 sites x 620 runs = ~6,200 calls, inside 10,000/day
 # Open-Meteo free tier: 600/min, 5,000/h, 10,000/day; every location counts as one call. Stay below.
@@ -110,6 +121,9 @@ def run(start: str, end: str, models: list[str] | None = None, keep_cache: bool 
     client = Client(min_interval_s=0.6, budget=Budget(**FREE_BUDGET))
     for model in models:
         delay, hours = MODELS[model]
+        if delay is None:
+            raise RuntimeError(f"{model}: publication delay not measured; run `uv run python -m tools.cli "
+                               f"nwp-delay --model {model}` and set it in MODELS (AGENTS.md rule 4)")
         runs = [t for t in pd.date_range(pd.Timestamp(start, tz="UTC"), pd.Timestamp(end, tz="UTC"), freq="h")
                 if t.hour in hours]
         ok = fail = inserted = 0

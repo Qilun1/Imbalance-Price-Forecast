@@ -84,6 +84,10 @@ def cmd_nwp_delay(a):
     from tools.ingest.openmeteo import MODELS, measure_delay
     measured = measure_delay(a.model)
     assumed = MODELS[a.model][0]
+    if assumed is None:
+        print(f"{a.model}: measured {measured}; no delay set yet. "
+              f"Suggested: measured + 10 min, rounded up to the next full hour, + 1 h margin")
+        return
     margin = assumed - measured - pd.Timedelta(minutes=10)
     print(f"{a.model}: measured {measured}, + 10 min Open-Meteo advice, assumed {assumed}, margin {margin}")
     if margin < pd.Timedelta(minutes=30):
