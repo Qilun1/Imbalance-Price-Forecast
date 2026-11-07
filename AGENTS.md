@@ -145,8 +145,9 @@ The submission file `forecast_backtest.csv` must keep exactly:
   the event.
 - Fingrid and ENTSO-E data are CC BY 4.0. We are responsible for the licence of every source we add,
   and every source and component must be listed with its licence in the submission.
-- `static_data/` and `backend/infer_data/` are gitignored and must stay so. In `backend/artifacts/`
-  only our own models (`*/*.txt`, `*/meta.json`) are tracked (rule 0).
+- `static_data/` and `backend/infer_data/` are gitignored and must stay so. `backend/artifacts/` is
+  gitignored too: models are rebuilt by the pipeline. Our own models (`*/*.txt`, `*/meta.json`) are the
+  only files there that may be committed, deliberately (`git add -f`), never by default (rule 0).
 
 ## 7. Deliverables
 

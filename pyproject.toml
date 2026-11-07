@@ -16,6 +16,7 @@ dependencies = [
     "tzdata>=2024.1",
     "fastapi>=0.115",
     "uvicorn>=0.30",
+    "matplotlib>=3.11.2",
 ]
 
 [dependency-groups]

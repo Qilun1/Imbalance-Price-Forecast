@@ -4,12 +4,10 @@ static_data/**
 !static_data/**/.gitkeep
 backend/infer_data/**
 !backend/infer_data/README.md
-# our own trained models MAY be committed (AGENTS.md rule 0): only *.txt boosters and meta.json
+# trained models are rebuilt locally by the pipeline and not tracked (tracking them made every
+# retrain collide with git pull). Rule 0 still permits committing a model deliberately with -f.
 backend/artifacts/**
 !backend/artifacts/.gitkeep
-!backend/artifacts/*/
-!backend/artifacts/*/*.txt
-!backend/artifacts/*/meta.json
 tools/starter_package/data/
 tools/starter_package/baseline_output/
 # full organiser package copies anywhere in the repo (contain licensed spot data)

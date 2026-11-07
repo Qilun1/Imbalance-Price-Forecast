@@ -17,6 +17,7 @@ Commands
   score --model NAME            validation score with the organiser's score.py (vs baseline)
   export --model NAME --period test|val [--out FILE]   submission CSV + organiser's validator
   compare --models A B ...       side-by-side validation scores (overall and by lead hour) from score.py output
+  diagnostics [--only learning,datasize,shap,calibration]   figures -> static_data/work/diagnostics/
   leakage [--n 60]              independent availability-rule check
   single-run --model NAME --origin TS   print one 10 h forecast
   pipeline --config FILE        features -> train val -> infer val -> score -> train final
@@ -155,6 +156,11 @@ def cmd_compare(a):
         print(pd.concat(hz, axis=1).to_string())
 
 
+def cmd_diagnostics(a):
+    from tools.eval.diagnostics import run
+    run(tuple(a.only.split(",")) if a.only else ("learning", "datasize", "shap", "calibration"))
+
+
 def cmd_leakage(a):
     from tools.eval.leakage import check
     if not check(a.set, a.n):
@@ -213,6 +219,7 @@ def main(argv=None):
     s.set_defaults(f=cmd_export)
     s = sub.add_parser("compare"); s.add_argument("--models", nargs="+", required=True)
     s.add_argument("--metric", default="mae_p50"); s.set_defaults(f=cmd_compare)
+    s = sub.add_parser("diagnostics"); s.add_argument("--only"); s.set_defaults(f=cmd_diagnostics)
     s = sub.add_parser("leakage"); s.add_argument("--set", default="v1"); s.add_argument("--n", type=int, default=60)
     s.set_defaults(f=cmd_leakage)
     s = sub.add_parser("single-run"); s.add_argument("--model", required=True); s.add_argument("--origin", required=True)
