@@ -1,0 +1,2 @@
+# LightGBM model files store byte offsets (tree_sizes), so line-ending conversion corrupts them.
+backend/artifacts/*/*.txt -text
