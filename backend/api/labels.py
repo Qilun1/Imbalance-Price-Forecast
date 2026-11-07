@@ -1,0 +1,74 @@
+"""Plain-language names for the model's feature ids, as they appear in `top_drivers`.
+
+The ids are the model's own and must not be renamed here or anywhere else: the trained models depend
+on them, including the double underscore in `ee__imb_mean4`. Unknown ids (a future feature set) fall
+back to a readable form of the id, so a new model never breaks the API.
+"""
+from __future__ import annotations
+
+LABELS: dict[str, str] = {
+    "step": "Quarter-hours ahead",
+    "lead_min": "Minutes since the latest price",
+    "data_age_min": "Age of the latest price",
+    "imb_last": "Latest imbalance price",
+    "spread_last": "Latest imbalance price vs spot",
+    "spread_mean4": "Imbalance price vs spot, latest hour",
+    "spread_mean16": "Imbalance price vs spot, latest 4 hours",
+    "spread_std16": "Imbalance price volatility, latest 4 hours",
+    "spread_max16": "Highest imbalance price vs spot, latest 4 hours",
+    "spread_min16": "Lowest imbalance price vs spot, latest 4 hours",
+    "dir_last": "Latest regulation direction",
+    "dir_mean4": "Regulation direction, latest hour",
+    "dir_mean16": "Regulation direction, latest 4 hours",
+    "dir_run_len": "How long the regulation direction has held",
+    "mfrr_up_mw_last": "Latest mFRR up activation",
+    "mfrr_up_mw_mean4": "mFRR up activation, latest hour",
+    "mfrr_dn_mw_last": "Latest mFRR down activation",
+    "mfrr_dn_mw_mean4": "mFRR down activation, latest hour",
+    "mfrr_up_px_vs_spot_last": "Latest mFRR up price vs spot",
+    "mfrr_up_px_vs_spot_mean4": "mFRR up price vs spot, latest hour",
+    "mfrr_dn_px_vs_spot_last": "Latest mFRR down price vs spot",
+    "mfrr_dn_px_vs_spot_mean4": "mFRR down price vs spot, latest hour",
+    "afrr_up_px_vs_spot_last": "Latest aFRR up price vs spot",
+    "afrr_up_px_vs_spot_mean4": "aFRR up price vs spot, latest hour",
+    "afrr_dn_px_vs_spot_last": "Latest aFRR down price vs spot",
+    "afrr_dn_px_vs_spot_mean4": "aFRR down price vs spot, latest hour",
+    "cons_last": "Latest consumption",
+    "cons_err_mean4": "Consumption forecast error, latest hour",
+    "net_pos_last": "Latest production minus consumption",
+    "prod_minus_consfc_mean4": "Production minus consumption forecast, latest hour",
+    "wind_fc_at_lag": "Wind forecast at the latest known quarter-hour",
+    "se1_flow_last": "Latest flow to SE1",
+    "se3_flow_last": "Latest flow to SE3",
+    "ee_flow_last": "Latest flow to Estonia",
+    "no4_flow_last": "Latest flow to NO4",
+    "net_export_last": "Latest net export",
+    "se1_imb_mean4": "SE1 imbalance price, latest hour",
+    "se3_imb_mean4": "SE3 imbalance price, latest hour",
+    "ee__imb_mean4": "Estonian imbalance price, latest hour",
+    "se3imb_vs_fispot": "SE3 imbalance price vs Finnish spot",
+    "spot": "Spot price level",
+    "spot_prev": "Spot price, previous quarter-hour",
+    "spot_next": "Spot price, next quarter-hour",
+    "spot_ramp": "Spot price change into the quarter-hour",
+    "spot_vs_horizon_mean": "Spot price vs its 10-hour average",
+    "spot_vs_last_known_spot": "Spot price vs the latest known quarter-hour",
+    "wind_fc": "Wind power forecast",
+    "cons_fc": "Consumption forecast",
+    "solar_fc": "Solar power forecast",
+    "cap_fi_ee": "Offered capacity Finland to Estonia",
+    "cap_ee_fi": "Offered capacity Estonia to Finland",
+    "wind_fc_ramp": "Wind forecast change over the hour",
+    "resid_load_fc": "Residual load forecast",
+    "wind_fc_change_vs_lag": "Wind forecast vs the latest known quarter-hour",
+    "cons_fc_vs_last_cons": "Consumption forecast vs latest consumption",
+    "hour_local": "Hour of the day",
+    "weekday": "Day of the week",
+    "holiday": "Public holiday",
+    "quarter": "Quarter of the hour",
+    "last_imbalance_price": "Latest imbalance price",
+}
+
+
+def label_for(feature_id: str) -> str:
+    return LABELS.get(feature_id, feature_id.replace("__", "_").replace("_", " ").capitalize())
