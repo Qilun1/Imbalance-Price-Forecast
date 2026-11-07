@@ -274,6 +274,8 @@ def test_hindsight_gives_each_quarter_hour_once_at_the_chosen_lead_time(client, 
                                        & (repo.primary["step"] == 37)]
     by_time = {p["delivery_start_utc"]: p for p in far["points"]}
     assert by_time["2026-10-23T13:00:00Z"]["p50"] == pytest.approx(made_10_hours_ahead["p50"].iloc[0], abs=0.01)
+    assert by_time["2026-10-23T13:00:00Z"]["p_up"] == pytest.approx(made_10_hours_ahead["p_up"].iloc[0], abs=0.0001)
+    assert by_time["2026-10-23T13:00:00Z"]["p_down"] == pytest.approx(made_10_hours_ahead["p_down"].iloc[0], abs=0.0001)
 
 
 def test_hindsight_never_shows_a_later_forecast_or_price(client):
