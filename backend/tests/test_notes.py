@@ -76,8 +76,10 @@ def test_bad_thresholds_are_rejected(client, bad):
     assert client.get("/api/notes", params={"persona": "trader", "thresholds": bad}).status_code == 422
 
 
-def test_persona_is_required_and_checked(client):
-    assert client.get("/api/notes").status_code == 422
+def test_without_persona_every_event_is_served(client):
+    body = client.get("/api/notes").json()
+    assert body["persona"] is None
+    assert {n["event"] for n in body["notes"]} == set(events.EVENT_IDS)
     assert client.get("/api/notes", params={"persona": "ceo"}).status_code == 422
 
 
