@@ -51,9 +51,9 @@ Browser tests use the installed Microsoft Edge, so no browser download is needed
 
 | Route | Purpose |
 |---|---|
-| `/` | Situations to check, KPIs, the forecast chart, main factors, largest changes |
+| `/` | Price history and what to check now, key figures, and the imbalance price and forecast chart with the spot price and balancing direction |
 | `/next-10h` | Every quarter-hour in a table, and the Exposure check |
-| `/hindsight` | Scores against the baseline, error by hours ahead, forecast vs actual, past situations |
+| `/hindsight` | Scores against the baseline and forecast vs actual, with past situations and the official scores in a side box |
 | `/dev/ui` | Hidden. Every primitive in every state |
 
 The viewing time is in the URL as `?as_of=<UTC>`, so a moment in the past can be shared as a link. The

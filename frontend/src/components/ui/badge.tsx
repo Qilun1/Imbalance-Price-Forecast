@@ -21,6 +21,7 @@ const badgeVariants = cva(
         up: "bg-up-bg text-up",
         down: "bg-down-bg text-down",
         warning: "bg-warning-bg text-warning",
+        error: "bg-error-bg text-error-text",
         info: "bg-info-bg text-info",
       },
     },

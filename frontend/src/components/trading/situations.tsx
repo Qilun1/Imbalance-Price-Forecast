@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 
 import { isSameSituation, useNow } from "./now-context";
 import { Panel, PanelBody, PanelHeader, PanelMessage } from "./panel";
+import { PriceHistorySection } from "./price-history";
 import { QueryState } from "./query-state";
 
 export const KIND_LABELS: Record<AlertKind, string> = {
@@ -29,12 +30,12 @@ export const KIND_LABELS: Record<AlertKind, string> = {
 
 export function SeverityBadge({ severity }: { severity: Alert["severity"] }) {
   return severity === "review" ? (
-    <Badge variant="warning">
+    <Badge variant="error">
       <TriangleAlert aria-hidden />
       Review
     </Badge>
   ) : (
-    <Badge variant="info">
+    <Badge variant="warning">
       <Eye aria-hidden />
       Watch
     </Badge>
@@ -44,7 +45,7 @@ export function SeverityBadge({ severity }: { severity: Alert["severity"] }) {
 function SituationCard({ alert, selected }: { alert: Alert; selected: boolean }) {
   const { select, review } = useNow();
   return (
-    <article className={cn("rounded-md border", selected ? "border-stone" : "hover:bg-fill/60")}>
+    <article className={cn("rounded-md border", selected ? "border-stone" : "border-hairline-soft hover:bg-fill/60")}>
       <button type="button" aria-pressed={selected} onClick={() => select(alert)} className="flex w-full flex-col gap-1 rounded-md px-3 py-2.5 text-left">
         <span className="flex items-center justify-between gap-2">
           <SeverityBadge severity={alert.severity} />
@@ -69,8 +70,9 @@ export function SituationsPanel() {
   const query = useQuery(queries.alerts(asOf));
   const { alerts, selected } = useNow();
   return (
-    <Panel label="Situations" className="h-full">
-      <PanelHeader title="Situations" note={alerts.length ? `${alerts.length} now` : undefined} />
+    <Panel label="Price history and what to check now" className="h-full">
+      <PriceHistorySection />
+      <PanelHeader title="What to check now" level={1} highlight note={alerts.length ? `${alerts.length} now` : undefined} />
       <PanelBody className="px-0 pb-0">
         <QueryState
           query={query}

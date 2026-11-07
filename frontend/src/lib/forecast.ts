@@ -1,5 +1,5 @@
 /** Reading a forecast: the plain calculations behind the KPI row, drivers and revision trail. */
-import type { Alert, Changes, Driver, Forecast, ForecastStep } from "@/lib/api/client";
+import type { Alert, Changes, Driver, Forecast, ForecastStep, HindsightPoint } from "@/lib/api/client";
 
 export const STEPS_PER_HOUR = 4;
 
@@ -35,17 +35,26 @@ export function stepsInWindow(steps: readonly ForecastStep[], window: { start: s
   return window ? steps.filter((step) => isInWindow(step.delivery_start_utc, window)) : [...steps];
 }
 
+/**
+ * Hindsight shows only what has happened. Prices are published after a delay, so the last quarter-hours
+ * before the viewing time have a forecast and no actual yet; those are cut. A gap earlier stays a gap.
+ */
+export function upToLastActual(points: readonly HindsightPoint[]): readonly HindsightPoint[] {
+  return points.slice(0, points.findLastIndex((point) => point.actual !== null) + 1);
+}
+
 const mean = (values: readonly number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
 
-function peak(steps: readonly ForecastStep[], value: (step: ForecastStep) => number) {
-  const top = steps.reduce((best, step) => (value(step) > value(best) ? step : best));
-  return { probability: value(top), at: top.delivery_start_utc };
+/** The P50 at its highest (sign 1) or lowest (sign -1) quarter-hour; the first one on a tie. */
+function extreme(steps: readonly ForecastStep[], sign: 1 | -1) {
+  const top = steps.reduce((best, step) => (sign * step.p50 > sign * best.p50 ? step : best));
+  return { price: top.p50, at: top.delivery_start_utc };
 }
 
 export type Headline = {
   nextHour: { p50: number; p10: number; p90: number; change: number | null };
-  highRisk: { probability: number; at: string };
-  lowRisk: { probability: number; at: string };
+  highest: { price: number; at: string };
+  lowest: { price: number; at: string };
   direction: { direction: Direction; probability: number };
   revision: { change: number; at: string; since: string } | null;
 };
@@ -74,8 +83,8 @@ export function headline(forecast: Forecast, changes: Changes | undefined): Head
       p90: mean(nextHour.map((step) => step.p90)),
       change: nextHourChanges.length ? mean(nextHourChanges.map((point) => point.p50_change)) : null,
     },
-    highRisk: peak(steps, (step) => step.p_spike_high),
-    lowRisk: peak(steps, (step) => step.p_spike_low),
+    highest: extreme(steps, 1),
+    lowest: extreme(steps, -1),
     direction: { direction: directionOf(likelihood), probability: directionProbability(likelihood) },
     revision:
       largest && changes?.previous_origin_utc

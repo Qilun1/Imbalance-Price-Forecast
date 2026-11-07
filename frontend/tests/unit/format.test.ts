@@ -9,11 +9,14 @@ import {
   formatDate,
   formatDateTime,
   formatDateTimeUtc,
+  formatShortDateTime,
   formatMegawatts,
   formatMinutes,
   formatPercent,
   formatPoints,
+  formatEuro,
   formatPrice,
+  formatPriceAxis,
   formatPriceRange,
   formatPriceWithUnit,
   formatScore,
@@ -38,6 +41,13 @@ describe("prices", () => {
     expect(formatPrice(63.85)).toBe("63.9");
     expect(formatPrice(-12.34)).toBe(`${MINUS}12.3`);
     expect(formatPrice(1234.5)).toBe("1,234.5");
+    expect(formatPriceAxis(-49.6)).toBe(`${MINUS}50`);
+    expect(formatPriceAxis(0.4)).toBe("0");
+    expect(formatEuro(63.85)).toBe("€63.9");
+    expect(formatEuro(-12.34)).toBe(`${MINUS}€12.3`);
+    expect(formatEuro(67, { plus: true })).toBe("+€67.0");
+    expect(formatEuro(97.9, { digits: 0 })).toBe("€98");
+    expect(formatEuro(null)).toBe("–");
     expect(formatPrice(0)).toBe("0.0");
   });
 
@@ -145,6 +155,7 @@ describe("time on screen", () => {
   it("names the UTC day, even when Helsinki is already on the next one", () => {
     expect(formatDate("2026-10-22T22:00:00Z")).toBe("Thu 22 Oct");
     expect(formatDateTime("2026-10-22T22:00:00Z")).toBe("Thu 22 Oct 22:00");
+    expect(formatShortDateTime("2026-10-22T22:00:00Z")).toBe("22 Oct 22:00");
     expect(utcHour("2026-10-22T22:00:00Z")).toBe(22);
     expect(toCalendarDate("2026-10-22T22:00:00Z").getDate()).toBe(22);
   });

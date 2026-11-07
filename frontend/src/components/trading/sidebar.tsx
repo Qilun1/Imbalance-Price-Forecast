@@ -25,11 +25,19 @@ function saveWidth(rail: boolean) {
   document.cookie = `${SIDEBAR_COOKIE}=${rail ? "rail" : "wide"}; path=/; max-age=31536000; samesite=lax`;
 }
 
-/** Keeps the viewing time when moving between screens. */
+/**
+ * Keeps the viewing time when moving between screens. In the browser the query is read from the address
+ * when the link is built, not from the last render: a shortcut pressed right after the time changed must
+ * carry the new time. useSearchParams still re-renders the links whenever the address changes.
+ */
 export function useScreenHref() {
   const searchParams = useSearchParams();
-  const query = searchParams.toString();
-  return (href: string) => (query ? `${href}?${query}` : href);
+  const rendered = searchParams.toString();
+  return (href: string) => {
+    // Re-encoded like useSearchParams, so the first render in the browser matches the server's HTML.
+    const query = typeof window === "undefined" ? rendered : new URLSearchParams(window.location.search).toString();
+    return query ? `${href}?${query}` : href;
+  };
 }
 
 function NavItem({ href, label, icon: Icon, rail, active }: { href: string; label: string; icon: LucideIcon; rail: boolean; active: boolean }) {

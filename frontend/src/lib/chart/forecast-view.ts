@@ -1,14 +1,23 @@
 /**
- * The main forecast chart: three panes on one time axis, each with its own single scale.
+ * The main forecast chart: two panes on one time axis, so the forecast line, the crosshair, dragging and
+ * the history row hold for both.
  *
- * 1. Price: last 24 h of actuals, the P10-P90 fan, P50, spot and the spot +/- 50 zone.
- * 2. Exceptional price risk: high upward, low downward.
- * 3. Balancing direction: up upward, down downward.
+ * 1. Price, kept plain, one scale:
+ *    - What happened before the forecast: a dark line with a soft fade under it.
+ *    - The forecast: a gold P50 line with the P10-P90 prediction interval as a light band around it.
+ *    - Nord Pool spot: a violet line, past and the day-ahead prices published for the forecast hours.
+ *    - "Show what happened" adds the realised price after the forecast time as a dark line.
+ * 2. Balancing direction: up above the middle line, down below it.
  *
- * Values hold for a whole quarter-hour, so every series is stepped. History sits in the lower panes at
- * full height: there it is what happened, not a probability.
+ * After the forecast line the lower pane shows the forecast's chances, the same numbers as the Next 10 h
+ * table. Before it a pale block at full height is what happened, not a probability. These values hold for
+ * a whole quarter-hour, so those series are stepped.
+ *
+ * The view opens on the chosen span of history plus the forecast. Dragging, a sideways swipe or the wheel
+ * (zoom) moves through the rest of the history that was loaded.
  */
 import {
+  AreaSeries,
   BaselineSeries,
   createChart,
   type IChartApi,
@@ -21,17 +30,31 @@ import {
   type LineData,
 } from "lightweight-charts";
 
-import type { ActualPoint, Forecast } from "@/lib/api/client";
-import { formatDate, formatPercent, fromUnixSeconds, toUnixSeconds, utcHour } from "@/lib/format";
+import type { ActualPoint, Alert, Forecast } from "@/lib/api/client";
+import { formatPriceAxis, fromUnixSeconds, toUnixSeconds } from "@/lib/format";
 import type { Direction } from "@/lib/forecast";
 
 import { type BandPoint, PaneHeading, StepBand, TimeMarks } from "./primitives";
-import { baseOptions, color, headingStyle, PRICE_FORMAT, withAlpha } from "./theme";
+import { baseOptions, color, headingStyle, withAlpha } from "./theme";
 
 const QUARTER_HOUR = 900;
+const PRICE_PANE_STRETCH = 2;
 const WHOLE_SCALE = { priceRange: { minValue: -1, maxValue: 1 } };
-/** Share of a lower pane kept clear of data for its heading. */
-const HEADING_SHARE = 0.3;
+/** Share of the lower pane kept clear of data for its heading. */
+const HEADING_SHARE = 0.14;
+const HAPPENED_FILL = 0.22;
+const FORECAST_FILL = 0.5;
+
+const DIRECTION_SIGN: Record<Direction, number> = { up: 1, none: 0, down: -1 };
+
+/**
+ * Whole percent either side of the middle line. Blank past 100 %: the heading's strip stretches the scale
+ * beyond it, and no chance is that large.
+ */
+function axisPercent(value: number): string {
+  const percent = Math.abs(value) * 100;
+  return percent > 100.5 ? "" : `${Math.round(percent)}%`;
+}
 
 export type ChartRow = {
   time: UTCTimestamp;
@@ -44,8 +67,6 @@ export type ChartRow = {
   outcome: number | null;
   pUp: number | null;
   pDown: number | null;
-  high: number | null;
-  low: number | null;
   realised: Direction | null;
 };
 
@@ -58,8 +79,6 @@ const EMPTY_ROW = {
   outcome: null,
   pUp: null,
   pDown: null,
-  high: null,
-  low: null,
   realised: null,
 };
 
@@ -87,8 +106,6 @@ export function buildRows(forecast: Forecast, history: readonly ActualPoint[], o
     row.spot = step.spot ?? row.spot;
     row.pUp = step.p_up;
     row.pDown = step.p_down;
-    row.high = step.p_spike_high;
-    row.low = step.p_spike_low;
   }
   for (const point of outcome) {
     if (!rows.has(toUnixSeconds(point.delivery_start_utc))) continue;
@@ -98,8 +115,9 @@ export function buildRows(forecast: Forecast, history: readonly ActualPoint[], o
 }
 
 type Point = LineData<UTCTimestamp> | WhitespaceData<UTCTimestamp>;
+type Value = (row: ChartRow) => number | null;
 
-function series(rows: readonly ChartRow[], value: (row: ChartRow) => number | null): Point[] {
+function series(rows: readonly ChartRow[], value: Value): Point[] {
   return rows.map((row) => {
     const number = value(row);
     return number === null ? { time: row.time } : { time: row.time, value: number };
@@ -107,7 +125,7 @@ function series(rows: readonly ChartRow[], value: (row: ChartRow) => number | nu
 }
 
 /** Stepped lines end where their last value starts, so a closing point shows the final quarter-hour. */
-function closed(rows: readonly ChartRow[], value: (row: ChartRow) => number | null): Point[] {
+function closed(rows: readonly ChartRow[], value: Value): Point[] {
   const points = series(rows, value);
   const last = rows.findLast((row) => value(row) !== null);
   const end = rows.at(-1);
@@ -115,45 +133,39 @@ function closed(rows: readonly ChartRow[], value: (row: ChartRow) => number | nu
   return [...points, { time: (end.time + QUARTER_HOUR) as UTCTimestamp, value: value(last) as number }];
 }
 
+const below = (value: number | null) => (value === null ? null : -value);
+
 function band(rows: readonly ChartRow[], upper: (row: ChartRow) => number | null, lower: (row: ChartRow) => number | null) {
   const points: BandPoint[] = [];
   for (const row of rows) {
     const [top, bottom] = [upper(row), lower(row)];
     if (top !== null && bottom !== null) points.push({ time: row.time, upper: top, lower: bottom });
   }
-  const last = points.at(-1);
-  if (last) points.push({ ...last, time: (last.time + QUARTER_HOUR) as UTCTimestamp });
   return points;
 }
 
-function realisedSign(direction: Direction | null): number | null {
-  if (direction === null) return null;
-  return { up: 1, down: -1, none: 0 }[direction];
-}
-
-export type ChartWindow = { start: string; end: string; selected: boolean };
+export type ChartWindow = { start: string; end: string; selected: boolean; severity: Alert["severity"] };
 
 export type ChartInput = {
   rows: readonly ChartRow[];
   origin: string;
-  margin: number;
   windows: readonly ChartWindow[];
+  /** Hours of history in view when the chart opens, left of the forecast; null for all of it. */
+  spanHours: number | null;
 };
 
 export class ForecastView {
   private readonly chart: IChartApi;
-  private readonly actual: ISeriesApi<"Line">;
-  private readonly p50: ISeriesApi<"Line">;
+  private readonly actual: ISeriesApi<"Area">;
   private readonly spot: ISeriesApi<"Line">;
+  private readonly p50: ISeriesApi<"Line">;
   private readonly outcome: ISeriesApi<"Line">;
-  private readonly riskHigh: ISeriesApi<"Baseline">;
-  private readonly riskLow: ISeriesApi<"Baseline">;
-  private readonly riskRealised: ISeriesApi<"Baseline">;
-  private readonly direction: ISeriesApi<"Baseline">;
-  private readonly directionRealised: ISeriesApi<"Baseline">;
+  private readonly directionHappened: ISeriesApi<"Baseline">;
+  private readonly up: ISeriesApi<"Baseline">;
+  private readonly down: ISeriesApi<"Baseline">;
   private readonly fan: StepBand;
-  private readonly zone: StepBand;
-  private readonly marks: TimeMarks[];
+  /** One per pane; the first carries the "Forecast" label. */
+  private readonly marks: readonly TimeMarks[];
   private rows = new Map<number, ChartRow>();
   private order: ChartRow[] = [];
   private cursor: number | null = null;
@@ -161,71 +173,92 @@ export class ForecastView {
   constructor(host: HTMLElement, private readonly onCross: (row: ChartRow | null) => void) {
     const ink = color("ink");
     const gold = color("series-1");
-    const stone = color("stone");
-    const up = color("up");
-    const down = color("down");
-    const hairline = color("hairline");
+    const upColor = color("up");
+    const downColor = color("down");
+    const base = baseOptions();
 
-    this.chart = createChart(host, baseOptions());
-    const line = { lineType: LineType.WithSteps, priceLineVisible: false, lastValueVisible: false };
-    const price = { ...line, priceFormat: PRICE_FORMAT, crosshairMarkerVisible: false };
+    this.chart = createChart(host, {
+      ...base,
+      grid: { vertLines: { visible: false }, horzLines: { color: withAlpha(color("chart-grid"), 0.6) } },
+      rightPriceScale: { borderVisible: false, tickMarkDensity: 6, scaleMargins: { top: 0.12, bottom: 0.08 } },
+      // Keeps the same hours in view when the panel changes width, so the forecast's end is never cut off.
+      // minBarSpacing lets "All" fit months of quarter-hours into the panel.
+      timeScale: { ...base.timeScale, borderVisible: false, lockVisibleTimeRangeOnResize: true, minBarSpacing: 0.01 },
+      handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
+      handleScale: {
+        mouseWheel: true,
+        pinch: true,
+        axisPressedMouseMove: { time: true, price: false },
+        axisDoubleClickReset: false,
+      },
+      crosshair: {
+        ...base.crosshair,
+        vertLine: { ...base.crosshair?.vertLine, style: LineStyle.Dashed, width: 1 },
+      },
+    });
 
-    this.spot = this.chart.addSeries(LineSeries, { ...price, color: stone, lineWidth: 1, lineStyle: LineStyle.Dashed });
-    this.actual = this.chart.addSeries(LineSeries, { ...price, color: ink, lineWidth: 1 });
-    this.p50 = this.chart.addSeries(LineSeries, { ...price, color: gold, lineWidth: 2 });
-    this.outcome = this.chart.addSeries(LineSeries, { ...price, color: ink, lineWidth: 2 });
+    const line = {
+      lineType: LineType.Simple,
+      priceLineVisible: false,
+      lastValueVisible: false,
+      priceFormat: { type: "custom", formatter: (price: number) => formatPriceAxis(price), minMove: 0.01 } as const,
+      crosshairMarkerRadius: 3,
+    };
 
-    this.zone = new StepBand({ fill: withAlpha(color("chart-zone"), 0.06), edge: withAlpha(color("chart-zone"), 0.18) });
-    this.fan = new StepBand({ fill: withAlpha(color("chart-band"), 0.38), edge: withAlpha(gold, 0.45) });
-    this.spot.attachPrimitive(this.zone);
+    // Added first, so it sits under the imbalance price lines.
+    this.spot = this.chart.addSeries(LineSeries, { ...line, color: color("chart-spot"), lineWidth: 2 });
+    this.actual = this.chart.addSeries(AreaSeries, {
+      ...line,
+      lineColor: ink,
+      lineWidth: 2,
+      topColor: withAlpha(ink, 0.1),
+      bottomColor: withAlpha(ink, 0),
+    });
+    this.p50 = this.chart.addSeries(LineSeries, { ...line, color: gold, lineWidth: 2 });
+    this.outcome = this.chart.addSeries(LineSeries, { ...line, color: ink, lineWidth: 2 });
+
+    this.fan = new StepBand({ fill: withAlpha(color("chart-band"), 0.32), shape: "line" });
     this.p50.attachPrimitive(this.fan);
 
-    const signal = (top: string, bottom: string, fill: number, pane: number) =>
+    const signal = (fill: number) =>
       this.chart.addSeries(
         BaselineSeries,
         {
-          ...line,
+          lineType: LineType.WithSteps,
+          priceLineVisible: false,
+          lastValueVisible: false,
           baseValue: { type: "price", price: 0 },
-          topLineColor: top,
-          topFillColor1: withAlpha(top, fill),
-          topFillColor2: withAlpha(top, fill),
-          bottomLineColor: bottom,
-          bottomFillColor1: withAlpha(bottom, fill),
-          bottomFillColor2: withAlpha(bottom, fill),
+          topLineColor: upColor,
+          topFillColor1: withAlpha(upColor, fill),
+          topFillColor2: withAlpha(upColor, fill),
+          bottomLineColor: downColor,
+          bottomFillColor1: withAlpha(downColor, fill),
+          bottomFillColor2: withAlpha(downColor, fill),
           lineWidth: 1,
           crosshairMarkerVisible: false,
           autoscaleInfoProvider: () => WHOLE_SCALE,
-          priceFormat: { type: "custom", formatter: (value: number) => formatPercent(Math.abs(value)), minMove: 0.01 },
+          priceFormat: { type: "custom", formatter: axisPercent, minMove: 0.01 },
         },
-        pane,
+        1,
       );
 
-    this.riskRealised = signal(up, down, 0.22, 1);
-    this.riskHigh = signal(up, down, 0.5, 1);
-    this.riskLow = signal(up, down, 0.5, 1);
-    this.directionRealised = signal(up, down, 0.22, 2);
-    this.direction = signal(up, down, 0.5, 2);
+    // What happened goes first, so the forecast is drawn over it.
+    this.directionHappened = signal(HAPPENED_FILL);
+    this.up = signal(FORECAST_FILL);
+    this.down = signal(FORECAST_FILL);
 
-    for (const baseline of [this.riskHigh, this.direction]) {
-      baseline.createPriceLine({ price: 0, color: hairline, lineWidth: 1, lineStyle: LineStyle.Solid, axisLabelVisible: false });
-    }
+    this.up.createPriceLine({ price: 0, color: color("hairline"), lineWidth: 1, lineStyle: LineStyle.Solid, axisLabelVisible: false });
+    this.chart.priceScale("right", 1).applyOptions({ borderVisible: false, tickMarkDensity: 2, scaleMargins: { top: HEADING_SHARE, bottom: 0.06 } });
+    this.chart.panes().forEach((pane, index) => pane.setStretchFactor(index === 0 ? PRICE_PANE_STRETCH : 1));
 
-    for (const pane of [1, 2]) {
-      this.chart.priceScale("right", pane).applyOptions({ tickMarkDensity: 1.2, scaleMargins: { top: HEADING_SHARE, bottom: 0.06 } });
-    }
-
-    const panes = this.chart.panes();
-    panes[0]?.setStretchFactor(2.8);
-    panes[1]?.setStretchFactor(1);
-    panes[2]?.setStretchFactor(1);
     const heading = headingStyle();
-    this.riskHigh.attachPrimitive(new PaneHeading("Exceptional price risk: high above, low below", HEADING_SHARE, heading));
-    this.direction.attachPrimitive(new PaneHeading("Balancing direction: up above, down below", HEADING_SHARE, heading));
+    this.up.attachPrimitive(new PaneHeading("Balancing direction: up above, down below (pale: what happened)", HEADING_SHARE, heading));
 
-    this.marks = [this.p50, this.riskHigh, this.direction].map((owner, pane) => {
-      const marks = new TimeMarks(pane === 0 ? heading.font : "");
-      owner.attachPrimitive(marks);
-      return marks;
+    // Attached after the heading, so the forecast line runs through its strip.
+    this.marks = [new TimeMarks(heading.font), new TimeMarks("", true)];
+    [this.p50, this.up].forEach((owner, pane) => {
+      const marks = this.marks[pane];
+      if (marks) owner.attachPrimitive(marks);
     });
 
     this.chart.subscribeCrosshairMove((event) => {
@@ -234,56 +267,42 @@ export class ForecastView {
     });
   }
 
-  update({ rows, origin, margin, windows }: ChartInput): void {
+  update({ rows, origin, windows, spanHours }: ChartInput): void {
     this.order = [...rows];
     this.rows = new Map(rows.map((row) => [row.time, row]));
 
-    this.spot.setData(closed(rows, (row) => row.spot));
-    this.zone.setPoints(
-      band(
-        rows,
-        (row) => (row.spot === null ? null : row.spot + margin),
-        (row) => (row.spot === null ? null : row.spot - margin),
-      ),
-    );
+    this.spot.setData(series(rows, (row) => row.spot));
     this.actual.setData(series(rows, (row) => row.actual));
-    this.p50.setData(closed(rows, (row) => row.p50));
+    this.p50.setData(series(rows, (row) => row.p50));
     this.fan.setPoints(band(rows, (row) => row.p90, (row) => row.p10));
     this.outcome.setData(series(rows, (row) => row.outcome));
 
-    this.riskHigh.setData(closed(rows, (row) => row.high));
-    this.riskLow.setData(closed(rows, (row) => (row.low === null ? null : -row.low)));
-    this.riskRealised.setData(
-      series(rows, (row) => {
-        if (row.actual === null || row.spot === null) return null;
-        if (row.actual > row.spot + margin) return 1;
-        return row.actual < row.spot - margin ? -1 : 0;
-      }),
-    );
-    this.direction.setData(closed(rows, (row) => (row.pUp === null || row.pDown === null ? null : row.pUp - row.pDown)));
-    this.directionRealised.setData(series(rows, (row) => realisedSign(row.realised)));
+    this.directionHappened.setData(series(rows, (row) => (row.realised === null ? null : DIRECTION_SIGN[row.realised])));
+    this.up.setData(closed(rows, (row) => row.pUp));
+    this.down.setData(closed(rows, (row) => below(row.pDown)));
 
-    const warning = color("warning");
-    const spans = windows.map((window) => ({
-      from: toUnixSeconds(window.start) as UTCTimestamp,
-      to: toUnixSeconds(window.end) as UTCTimestamp,
-      fill: withAlpha(warning, window.selected ? 0.16 : 0.05),
-    }));
+    // Only the situation picked on the right is shaded: overlapping windows stacked into a dark block.
+    // Red for Review and yellow for Watch, like the badges. Both stay see-through: the prediction interval
+    // is drawn underneath, and it is what the shaded window is about.
+    const spans = windows
+      .filter((window) => window.selected)
+      .map((window) => ({
+        from: toUnixSeconds(window.start) as UTCTimestamp,
+        to: toUnixSeconds(window.end) as UTCTimestamp,
+        fill: window.severity === "review" ? withAlpha(color("error-text"), 0.12) : withAlpha(color("warning-bg"), 0.4),
+      }));
     const axis = color("chart-axis");
-    const crosshair = color("chart-crosshair");
-    const days = rows
-      .filter((row) => {
-        const iso = fromUnixSeconds(row.time);
-        return utcHour(iso) === 0 && new Date(iso).getUTCMinutes() === 0;
-      })
-      .map((row) => ({ time: row.time, color: withAlpha(axis, 0.3), label: formatDate(fromUnixSeconds(row.time)), labelColor: axis }));
-    const made = { time: toUnixSeconds(origin) as UTCTimestamp, color: crosshair, label: "Forecast made", labelColor: crosshair };
-    const lines = [made, ...days];
-    this.marks[0]?.set(spans, lines);
-    const unlabelled = lines.map(({ time, color: tone }) => ({ time, color: tone }));
-    for (const marks of this.marks.slice(1)) marks.set(spans, unlabelled);
+    const time = toUnixSeconds(origin) as UTCTimestamp;
+    const made = { time, color: withAlpha(axis, 0.35) };
+    this.marks.forEach((marks, pane) => marks.set(spans, [pane === 0 ? { ...made, label: "Forecast", labelColor: axis } : made]));
 
-    this.chart.timeScale().fitContent();
+    // Every row is a point on the time scale (empty values are whitespace), so row positions are the
+    // chart's logical indices, which hold even right after new data. The last index is the lower pane's
+    // closing point. The view starts just after the span's first moment: a time label exactly on the left
+    // edge would be cut in half.
+    const start = spanHours === null ? 0 : toUnixSeconds(origin) - spanHours * 3600;
+    const from = Math.max(0, rows.findIndex((row) => row.time > start));
+    if (rows.length) this.chart.timeScale().setVisibleLogicalRange({ from, to: rows.length });
     this.cursor = null;
   }
 
@@ -296,12 +315,15 @@ export class ForecastView {
     const row = this.order[next];
     if (!row) return;
     this.cursor = next;
-    this.chart.setCrosshairPosition(row.spot ?? 0, row.time, this.spot);
+    this.chart.setCrosshairPosition(row.p50 ?? row.actual ?? 0, row.time, this.p50);
+    // The chart reports only the pointer's moves, so the readout is told about this one directly.
+    this.onCross(row);
   }
 
   clearCursor(): void {
     this.cursor = null;
     this.chart.clearCrosshairPosition();
+    this.onCross(null);
   }
 
   dispose(): void {

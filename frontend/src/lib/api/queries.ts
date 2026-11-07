@@ -13,8 +13,11 @@ import { ApiError } from "./errors";
 const THIRTY_MINUTES = 30 * 60_000;
 const META_POLL_MS = 60_000;
 const META_RETRY_MS = 10_000;
-const HISTORY_HOURS = 24;
 export const HORIZON_HOURS = 10;
+/** First quarter-hour of the organiser's data (package README, AGENTS.md section 4). */
+export const DATA_START_UTC = "2026-05-31T21:00:00Z";
+/** Day-ahead spot reaches at most this far past the forecast time. The API drops what was not yet published. */
+const DAY_AHEAD_HOURS = 48;
 
 const byTime = (asOf: string | undefined) => ({
   staleTime: asOf ? Number.POSITIVE_INFINITY : META_POLL_MS,
@@ -45,11 +48,18 @@ export const queries = {
     queryOptions({ queryKey: ["alerts", asOf ?? "latest"], queryFn: () => api.alerts(asOf), ...byTime(asOf) }),
   alertHistory: (asOf?: string) =>
     queryOptions({ queryKey: ["alert-history", asOf ?? "latest"], queryFn: () => api.alertHistory(asOf), ...byTime(asOf) }),
-  /** The day before the viewing time, for the left side of the forecast chart. */
-  recentActuals: (origin: string, asOf?: string) =>
+  /** Everything from the start of the data, plus day-ahead spot already published. Usable rows only (rule 4). */
+  priceHistory: (origin: string, asOf?: string) =>
     queryOptions({
-      queryKey: ["actuals", "recent", asOf ?? "latest", origin],
-      queryFn: () => api.actuals(asOf, addHours(origin, -HISTORY_HOURS), origin),
+      queryKey: ["actuals", "all", asOf ?? "latest", origin],
+      queryFn: () => api.actuals(asOf, DATA_START_UTC, addHours(origin, DAY_AHEAD_HOURS)),
+      ...byTime(asOf),
+    }),
+  /** Observed prices, spot included, for quarter-hours in [from, to), as usable at the viewing time (rule 4). */
+  actualsBetween: (asOf: string | undefined, from: string, to: string) =>
+    queryOptions({
+      queryKey: ["actuals", "between", asOf ?? "latest", from, to],
+      queryFn: () => api.actuals(asOf, from, to),
       ...byTime(asOf),
     }),
   /** What really happened after the viewing time. Asked of the newest data on purpose: it is hindsight. */

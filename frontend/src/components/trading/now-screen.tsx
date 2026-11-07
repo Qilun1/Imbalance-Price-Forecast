@@ -7,50 +7,52 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { safeStorage, useIsWide } from "@/lib/browser";
 
 import { NowProvider } from "./now-context";
-import { ChangesPanel, DriversPanel, ForecastPanel, KpiRow } from "./now-panels";
-import { PageHeader } from "./page-header";
+import { ForecastPanel, KpiRow } from "./now-panels";
 import { SituationSheet } from "./situation-sheet";
 import { SituationsPanel } from "./situations";
 
 const GAP_HANDLE = "w-3 bg-transparent aria-[orientation=horizontal]:h-3 aria-[orientation=horizontal]:w-full";
 
 function WideLayout() {
-  const across = useDefaultLayout({ id: "now-across", panelIds: ["situations", "evidence"], storage: safeStorage });
-  const down = useDefaultLayout({ id: "now-down", panelIds: ["forecast", "detail"], storage: safeStorage });
+  // A new storage id whenever the default split changes, so sizes saved for an older layout do not apply.
+  const across = useDefaultLayout({ id: "now-across-v3", panelIds: ["evidence", "situations"], storage: safeStorage });
   return (
-    <ResizablePanelGroup orientation="horizontal" className="min-h-96 flex-1" defaultLayout={across.defaultLayout} onLayoutChanged={across.onLayoutChanged}>
-      <ResizablePanel id="situations" defaultSize="28" minSize="22" maxSize="42">
-        <SituationsPanel />
-      </ResizablePanel>
-      <ResizableHandle className={GAP_HANDLE} aria-label="Resize the situations panel" />
-      <ResizablePanel id="evidence" defaultSize="72">
-        <ResizablePanelGroup orientation="vertical" defaultLayout={down.defaultLayout} onLayoutChanged={down.onLayoutChanged}>
-          <ResizablePanel id="forecast" defaultSize="67" minSize="45">
-            <ForecastPanel />
-          </ResizablePanel>
-          <ResizableHandle className={GAP_HANDLE} aria-label="Resize the forecast panel" />
-          <ResizablePanel id="detail" defaultSize="33" minSize="18">
-            <div className="grid h-full grid-cols-2 gap-3">
-              <DriversPanel />
-              <ChangesPanel />
+    // The height sits on a wrapper: the panel group sets its own height inline.
+    <div className="min-h-[36rem] flex-1">
+      <ResizablePanelGroup
+        orientation="horizontal"
+        className="h-full"
+        defaultLayout={across.defaultLayout}
+        onLayoutChanged={across.onLayoutChanged}
+      >
+        <ResizablePanel id="evidence" defaultSize="66">
+          {/* The key figures sit above the chart, so their edges match it and the situations run full height. */}
+          <div className="flex h-full min-h-0 flex-col gap-3">
+            <KpiRow />
+            <div className="min-h-0 flex-1">
+              <ForecastPanel />
             </div>
-          </ResizablePanel>
-        </ResizablePanelGroup>
-      </ResizablePanel>
-    </ResizablePanelGroup>
+          </div>
+        </ResizablePanel>
+        <ResizableHandle className={GAP_HANDLE} aria-label="Resize the situations panel" />
+        <ResizablePanel id="situations" defaultSize="34" minSize="26" maxSize="45">
+          <SituationsPanel />
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    </div>
   );
 }
 
 function StackedLayout() {
   return (
     <div className="flex shrink-0 flex-col gap-3">
-      <SituationsPanel />
-      <div className="h-[32rem]">
-        <ForecastPanel />
+      <KpiRow />
+      {/* The wrappers keep each box's own height: directly in this column, its h-full would span the page. */}
+      <div className="shrink-0">
+        <SituationsPanel />
       </div>
-      <div className="grid gap-3 md:grid-cols-2">
-        <DriversPanel />
-        <ChangesPanel />
+      <div className="h-[56rem] shrink-0">
+        <ForecastPanel />
       </div>
     </div>
   );
@@ -60,8 +62,6 @@ export function NowScreen() {
   const wide = useIsWide();
   return (
     <NowProvider>
-      <PageHeader title="What to check now" />
-      <KpiRow />
       {wide === null ? <Skeleton className="min-h-0 flex-1" /> : wide ? <WideLayout /> : <StackedLayout />}
       <SituationSheet />
     </NowProvider>
