@@ -1,7 +1,7 @@
 """Response shapes of the API. All timestamps are UTC; prices are EUR/MWh.
 
-No field here may ever hold a spot price or anything a spot price could be recovered from, such as a
-spot + 50 threshold (AGENTS.md rule 6). Spike risk is exposed as probabilities only.
+Spot fields are licensed data (AGENTS.md rule 6). The dashboard may show them, and they carry a value
+only from the row's first_usable_origin_utc, so at a viewing time they hold what was published by then.
 """
 from __future__ import annotations
 
@@ -31,6 +31,7 @@ class ForecastStep(BaseModel):
     p_none: float
     p_spike_high: float
     p_spike_low: float
+    spot: float | None
     drivers: list[Driver]
 
 
@@ -40,6 +41,7 @@ class Forecast(BaseModel):
     model: str
     data_cutoff_utc: datetime | None
     data_age_minutes: int | None
+    spot_known_until_utc: datetime | None
     steps: list[ForecastStep]
 
 
@@ -47,6 +49,7 @@ class ActualPoint(BaseModel):
     delivery_start_utc: datetime
     imbalance_price: float | None
     direction: Direction | None
+    spot: float | None
 
 
 class Actuals(BaseModel):
@@ -127,6 +130,30 @@ class Notes(BaseModel):
     notes: list[Note]
 
 
+class SituationHour(BaseModel):
+    """How many situations were open at one forecast. Hours with none are left out."""
+    origin_utc: datetime
+    review: int
+    watch: int
+
+
+class Situation(BaseModel):
+    """One situation, from the forecast that first raised it to the last one that still did."""
+    first_origin_utc: datetime
+    last_origin_utc: datetime
+    alert: Alert
+    outcome: Literal["happened", "did_not_happen", "pending", "not_applicable"] = "pending"
+    outcome_note: str | None = None
+
+
+class AlertHistory(BaseModel):
+    as_of_utc: datetime
+    from_utc: datetime
+    to_utc: datetime
+    hours: list[SituationHour]
+    situations: list[Situation]
+
+
 class Scores(BaseModel):
     rows: int
     mae_p50: float | None
@@ -167,6 +194,25 @@ class Performance(BaseModel):
     to_utc: datetime
     official: OfficialScores | None
     diagnostic: DiagnosticScores
+
+
+class HindsightPoint(BaseModel):
+    delivery_start_utc: datetime
+    p10: float
+    p50: float
+    p90: float
+    baseline_p50: float | None
+    actual: float | None
+    spot: float | None
+
+
+class Hindsight(BaseModel):
+    """Each quarter-hour as forecast `lead_hours` ahead, against what happened."""
+    as_of_utc: datetime
+    from_utc: datetime
+    to_utc: datetime
+    lead_hours: int
+    points: list[HindsightPoint]
 
 
 class PeriodInfo(BaseModel):

@@ -18,11 +18,12 @@ import numpy as np
 import pandas as pd
 
 from imbalance import forecasts, store
-from imbalance.contract import DIRECTION_SERIES, FORECAST_COLUMNS, HORIZON_STEPS, STEP, TARGET_SERIES
+from imbalance.contract import DIRECTION_SERIES, FORECAST_COLUMNS, HORIZON_STEPS, SPOT_SERIES, STEP, TARGET_SERIES
 
 from backend.api.settings import MOCK_BASELINE, MOCK_CHALLENGER, MOCK_DB, MOCK_MODEL, MOCK_NOTES
 
 SEED = 20261107
+DISPLAY_TZ = "Europe/Helsinki"
 FIRST_ORIGIN = pd.Timestamp("2026-10-21T21:00:00Z")   # 22 Oct 00:00 Helsinki
 N_ORIGINS = 168                                       # one week of hourly forecasts
 HISTORY = pd.Timedelta(days=3)                        # actuals before the first forecast
@@ -72,7 +73,8 @@ def _grid() -> pd.DatetimeIndex:
 
 
 def _actual_series(grid: pd.DatetimeIndex, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """(level, price, direction) per quarter-hour. `level` is an invented daily shape."""
+    """(level, price, direction) per quarter-hour. `level` is an invented daily shape and doubles as
+    the mock's spot price, so spike risk and direction relate to it the way they do to the real one."""
     local = grid.tz_convert("Europe/Helsinki")
     hour = np.asarray(local.hour + local.minute / 60.0)
     level = 24.0 + 15.0 * np.sin(2 * np.pi * (hour - 6.0) / 24.0)
@@ -214,13 +216,19 @@ def _baseline_rows(grid: pd.DatetimeIndex, price: np.ndarray) -> pd.DataFrame:
     })
 
 
-def _observation_rows(grid: pd.DatetimeIndex, price: np.ndarray, direction: np.ndarray) -> pd.DataFrame:
+def _spot_usable(grid: pd.DatetimeIndex) -> pd.DatetimeIndex:
+    """Day-ahead prices come out at 14:00 Helsinki time on the day before delivery."""
+    delivery_day = grid.tz_convert(DISPLAY_TZ).tz_localize(None).normalize()
+    return (delivery_day - pd.Timedelta(days=1) + pd.Timedelta(hours=14)).tz_localize(DISPLAY_TZ).tz_convert("UTC")
+
+
+def _observation_rows(grid: pd.DatetimeIndex, price: np.ndarray, direction: np.ndarray, level: np.ndarray) -> pd.DataFrame:
     usable = (grid + STEP + pd.Timedelta(minutes=60)).ceil("h")     # same shape of delay as the package
-    def series(series_id: str, values: np.ndarray, unit: str) -> pd.DataFrame:
+    def series(series_id: str, values: np.ndarray, unit: str, first_usable: pd.DatetimeIndex) -> pd.DataFrame:
         return pd.DataFrame({"series_id": series_id, "source": "mock", "dataset_id": "", "timestamp_utc": grid,
-                             "value": values, "unit": unit, "first_usable_origin_utc": usable})
-    return pd.concat([series(TARGET_SERIES, price, "EUR/MWh"), series(DIRECTION_SERIES, direction, "-1/0/1")],
-                     ignore_index=True)
+                             "value": values, "unit": unit, "first_usable_origin_utc": first_usable})
+    return pd.concat([series(TARGET_SERIES, price, "EUR/MWh", usable), series(DIRECTION_SERIES, direction, "-1/0/1", usable),
+                      series(SPOT_SERIES, level, "EUR/MWh", _spot_usable(grid))], ignore_index=True)
 
 
 def check_rows(df: pd.DataFrame) -> None:
@@ -282,10 +290,10 @@ def generate(path: Path = MOCK_DB) -> Path:
     path.unlink(missing_ok=True)
     forecasts.write(MOCK_MODEL, model, path)
     forecasts.write(MOCK_BASELINE, baseline, path)
+    store.insert_observations(_observation_rows(grid, price, direction, level), "mock", path)
     forecasts.write(MOCK_CHALLENGER, challenger, path)
     from imbalance.alert_inference import write_probs
     write_probs(notes, path)
-    store.insert_observations(_observation_rows(grid, price, direction), "mock", path)
     return path
 
 

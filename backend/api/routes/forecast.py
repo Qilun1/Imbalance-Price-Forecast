@@ -5,6 +5,8 @@ import pandas as pd
 from fastapi import APIRouter, Depends, Query
 from pydantic import AwareDatetime
 
+from imbalance.contract import STEP
+
 from backend.api.labels import label_for
 from backend.api.repository import Repository, get_repository
 from backend.api.schemas import ChangePoint, Changes, Driver, Forecast, ForecastStep
@@ -26,16 +28,18 @@ def get_forecast(as_of: AwareDatetime | None = Query(None, description="Viewing 
     rows = repo.forecast(origin)
     cutoff = rows["data_cutoff_utc"].iloc[0]
     has_cutoff = not pd.isna(cutoff)
+    spot = repo.spot(moment, rows["delivery_start_utc"].iloc[0], rows["delivery_start_utc"].iloc[-1] + STEP)
     steps = [ForecastStep(step=int(r.step), delivery_start_utc=r.delivery_start_utc,
                           p10=round(r.p10, 2), p50=round(r.p50, 2), p90=round(r.p90, 2),
                           p_up=round(r.p_up, 4), p_down=round(r.p_down, 4), p_none=round(r.p_none, 4),
                           p_spike_high=round(r.p_spike_high, 4), p_spike_low=round(r.p_spike_low, 4),
+                          spot=round(spot[r.delivery_start_utc], 2) if r.delivery_start_utc in spot.index else None,
                           drivers=_drivers(r.top_drivers))
              for r in rows.itertuples(index=False)]
     return Forecast(as_of_utc=moment, origin_utc=origin, model=rows["model"].iloc[0],
                     data_cutoff_utc=cutoff if has_cutoff else None,
                     data_age_minutes=int((origin - cutoff) / pd.Timedelta(minutes=1)) if has_cutoff else None,
-                    steps=steps)
+                    spot_known_until_utc=repo.spot_known_until(moment), steps=steps)
 
 
 @router.get("/changes", response_model=Changes)

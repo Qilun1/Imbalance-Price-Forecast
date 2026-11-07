@@ -1,4 +1,4 @@
-"""Realised imbalance price and direction, limited to what was usable at the viewing time."""
+"""Realised imbalance price and direction with spot, limited to what was usable at the viewing time."""
 from __future__ import annotations
 
 import pandas as pd
@@ -23,6 +23,7 @@ def get_actuals(start: AwareDatetime | None = Query(None, alias="from", descript
     rows = repo.actuals(moment, first, last)
     points = [ActualPoint(delivery_start_utc=r.delivery_start_utc,
                           imbalance_price=None if pd.isna(r.imbalance_price) else round(r.imbalance_price, 2),
-                          direction=None if pd.isna(r.direction) else r.direction)
+                          direction=None if pd.isna(r.direction) else r.direction,
+                          spot=None if pd.isna(r.spot) else round(r.spot, 2))
               for r in rows.itertuples(index=False)]
     return Actuals(as_of_utc=moment, from_utc=first, to_utc=last, points=points)

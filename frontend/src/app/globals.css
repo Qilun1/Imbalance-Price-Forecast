@@ -1,0 +1,135 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "../styles/tokens.css";
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background font-sans text-base text-foreground;
+    font-variant-numeric: tabular-nums;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p,
+  li,
+  dd {
+    text-wrap: pretty;
+  }
+}
+
+@utility font-title {
+  font-family: var(--font-display);
+  font-weight: 340;
+  font-variation-settings: "opsz" 48;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* Hides a scrollbar where a panel scrolls but the bar would crowd dense content. */
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-silver) transparent;
+}
+
+/* The prompt's focus rule for every interactive element. Unlayered, so it wins over `outline-none`. */
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.on-dark :focus-visible {
+  outline-color: var(--color-focus-on-dark);
+}
+
+/* A field inside a group shows its ring on the group, not on a box within it. */
+[data-slot="input-group"]:has(:focus-visible) {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+[data-slot="input-group"] :focus-visible {
+  outline: none;
+}
+
+html {
+  touch-action: manipulation;
+}
+
+/* Fingers need more room than a mouse. */
+@media (pointer: coarse) {
+  [data-slot="button"],
+  [data-slot="toggle-group-item"],
+  [data-slot="select-trigger"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Panels take focus by keyboard (F6). Their ring sits inside so it is not clipped. */
+[data-panel]:focus-visible {
+  outline-offset: -2px;
+}
+
+/* A changed cell during Replay. Only the background moves, so nothing shifts. */
+@keyframes flash-up {
+  from {
+    background-color: var(--color-up-bg);
+  }
+}
+
+@keyframes flash-down {
+  from {
+    background-color: var(--color-down-bg);
+  }
+}
+
+.flash-up {
+  animation: flash-up 400ms var(--ease-out);
+}
+
+.flash-down {
+  animation: flash-down 400ms var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flash-up,
+  .flash-down {
+    animation: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* DESIGN.md's quiet overline: section context, table headers, labels. */
+@utility eyebrow {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* One stroke weight across the app, beside regular text. */
+.lucide {
+  stroke-width: 1.5;
+}

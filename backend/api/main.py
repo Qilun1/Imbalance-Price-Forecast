@@ -1,6 +1,6 @@
 """Situational API for the imbalance price forecast.
 
-Run from the repo root:  uv run uvicorn backend.api.main:app --reload --port 8000
+Run from the repo root:  uv run python -m uvicorn backend.api.main:app --reload --port 8000
 Interactive docs:        http://127.0.0.1:8000/docs
 Set IMBALANCE_DATA_MODE=real to serve the pipeline's forecasts; the default is invented mock data.
 """
@@ -8,24 +8,26 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from pathlib import Path
+from threading import Thread
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.api.repository import OutOfRange, get_repository
-from backend.api.routes import actuals, alerts, forecast, meta, notes, performance, umm
+from backend.api.routes import actuals, alerts, forecast, hindsight, meta, notes, performance, umm
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    get_repository()            # fail at start-up with a clear message, not on the first request
+    repo = get_repository()     # fail at start-up with a clear message, not on the first request
+    Thread(target=repo.prepare_alerts, daemon=True).start()     # takes seconds over all real forecasts
     yield
 
 
 app = FastAPI(title="Imbalance price forecast API", version="0.1.0", lifespan=lifespan)
 
-for module in (meta, forecast, actuals, alerts, notes, performance, umm):
+for module in (meta, forecast, actuals, alerts, notes, performance, hindsight, umm):
     app.include_router(module.router, prefix="/api")
 
 

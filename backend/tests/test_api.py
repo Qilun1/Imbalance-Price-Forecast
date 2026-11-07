@@ -57,8 +57,7 @@ def test_mock_is_repeatable_and_follows_the_rules(tmp_path, repo):
     mock.check_rows(repo.challenger)
 
 
-def test_spot_is_never_loaded(repo):
-    assert SPOT_SERIES not in DISPLAY_SERIES
+def test_only_the_display_series_are_loaded(repo):
     assert set(repo.observations["series_id"]) == set(DISPLAY_SERIES)
 
 
@@ -100,10 +99,11 @@ def test_actuals_show_only_what_was_usable_at_that_moment(client, repo):
     body = client.get("/api/actuals", params={"as_of": iso(as_of), "from": iso(as_of - pd.Timedelta(days=2)),
                                               "to": iso(as_of + pd.Timedelta(days=2))}).json()
     usable = repo.observations.query("series_id == 'fi_imbalance_price'").set_index("timestamp_utc")["first_usable_origin_utc"]
-    shown = pd.to_datetime([p["delivery_start_utc"] for p in body["points"]], utc=True)
+    priced = [p for p in body["points"] if p["imbalance_price"] is not None]
+    shown = pd.to_datetime([p["delivery_start_utc"] for p in priced], utc=True)
     assert (usable.loc[shown] <= as_of).all()
     assert shown.max() == as_of - pd.Timedelta(minutes=75)      # README section 4: 60 min delay, then next full hour
-    assert body["points"][-1]["direction"] in ("up", "down", "none")
+    assert priced[-1]["direction"] in ("up", "down", "none")
 
 
 def test_changes_cover_the_36_overlapping_quarter_hours(client):
@@ -158,10 +158,11 @@ def test_alerts_suggest_a_check_and_name_drivers(client):
     assert alert["window_start_utc"] == "2026-10-23T13:00:00Z" and alert["window_end_utc"] == "2026-10-23T15:00:00Z"
 
 
-def test_alert_times_read_in_helsinki_across_the_clock_change(client):
+def test_alert_times_read_in_utc_and_say_so(client):
     body = client.get("/api/alerts", params={"as_of": iso(SCENARIO["large_revision"].as_of)}).json()
     alert = next(a for a in body["alerts"] if a["kind"] == "forecast_changed")
-    assert "09:00–12:00" in alert["message"]                    # 07:00-10:00 UTC, after the clocks went back
+    assert "07:00–10:00 UTC" in alert["message"]
+    assert alert["window_start_utc"] == "2026-10-25T07:00:00Z" and alert["window_end_utc"] == "2026-10-25T10:00:00Z"
 
 
 def test_performance_never_looks_past_the_viewing_time(client):
@@ -177,15 +178,115 @@ def test_performance_is_labelled_and_compares_with_the_baseline(client):
     assert body["official"] is None
     assert body["diagnostic"]["note"].startswith("Diagnostic")
     model, baseline = body["diagnostic"]["model"], body["diagnostic"]["baseline"]
-    assert model["overall"]["brier_spike_mean"] is None         # needs spot, which the API never loads
+    assert 0.0 <= model["overall"]["brier_spike_mean"] <= 1.0
     assert 0.0 <= model["overall"]["coverage_p10_p90"] <= 1.0
     assert [h["horizon_hour"] for h in model["by_horizon"]] == list(range(1, 11))
     assert model["overall"]["mae_p50"] < baseline["overall"]["mae_p50"]
 
 
-@pytest.mark.parametrize("path", ["/api/meta", "/api/forecast", "/api/changes", "/api/actuals", "/api/alerts", "/api/performance"])
-def test_no_response_has_a_spot_field(client, path):
-    assert not [k for k in keys_of(client.get(path).json()) if "spot" in k.lower()]
+def spot_usable_from(repo: Repository) -> pd.Series:
+    return repo.observations.query("series_id == @SPOT_SERIES").set_index("timestamp_utc")["first_usable_origin_utc"]
+
+
+@pytest.mark.parametrize("as_of", [pd.Timestamp(mock.FIRST_ORIGIN) + pd.Timedelta(hours=h) for h in range(0, 168, 7)])
+def test_no_spot_value_is_served_before_it_is_usable(client, repo, as_of):
+    window = {"as_of": iso(as_of), "from": iso(as_of - pd.Timedelta(days=2)), "to": iso(as_of + pd.Timedelta(days=3))}
+    points = client.get("/api/actuals", params=window).json()["points"]
+    steps = client.get("/api/forecast", params={"as_of": iso(as_of)}).json()["steps"]
+    shown = [p["delivery_start_utc"] for p in [*points, *steps] if p["spot"] is not None]
+    assert shown and (spot_usable_from(repo).loc[pd.to_datetime(shown, utc=True)] <= as_of).all()
+
+
+def test_the_full_horizon_has_spot(client):
+    assert all(s["spot"] is not None for s in client.get("/api/forecast").json()["steps"])
+
+
+def test_tomorrows_spot_appears_at_14_helsinki_time(client):
+    before, published = "2026-10-23T10:00:00Z", "2026-10-23T11:00:00Z"      # 13:00 and 14:00 in Helsinki
+    window = {"from": "2026-10-23T12:00:00Z", "to": "2026-10-24T22:00:00Z"}
+    def known_until(as_of: str) -> str:
+        return client.get("/api/forecast", params={"as_of": as_of}).json()["spot_known_until_utc"]
+    def spot_rows(as_of: str) -> int:
+        points = client.get("/api/actuals", params={**window, "as_of": as_of}).json()["points"]
+        return sum(p["spot"] is not None for p in points)
+    assert known_until(before) == "2026-10-23T21:00:00Z"                    # midnight in Helsinki
+    assert known_until(published) == "2026-10-24T21:00:00Z"
+    assert spot_rows(before) == 36 and spot_rows(published) == 132
+
+
+def test_spot_on_the_clock_change_day_covers_the_extra_hour(repo):
+    usable = spot_usable_from(repo)
+    day = usable[(usable.index >= "2026-10-24T21:00:00Z") & (usable.index < "2026-10-25T22:00:00Z")]
+    assert len(day) == 100 and set(day) == {pd.Timestamp("2026-10-24T11:00:00Z")}
+
+
+def test_history_lists_each_situation_once(client):
+    body = client.get("/api/alerts/history").json()
+    assert body["hours"] and body["situations"]
+    assert {s["alert"]["kind"] for s in body["situations"]} >= {"spike_risk", "regulation_expected", "forecast_changed",
+                                                                "high_uncertainty", "stale_data", "conflicting_signals"}
+    assert any(s["first_origin_utc"] < s["last_origin_utc"] for s in body["situations"]), "a situation can last hours"
+    per_hour = client.get("/api/alerts", params={"as_of": body["hours"][0]["origin_utc"]}).json()["alerts"]
+    assert body["hours"][0]["review"] + body["hours"][0]["watch"] == len(per_hour)
+
+
+def situation(client, kind, as_of="2026-10-28T20:00:00Z", title=None):
+    situations = client.get("/api/alerts/history", params={"as_of": as_of}).json()["situations"]
+    return next(s for s in situations if s["alert"]["kind"] == kind and (title is None or s["alert"]["title"] == title))
+
+
+def test_a_spike_that_came_true_is_marked_so(client):
+    spike = situation(client, "spike_risk", title="Risk of an exceptionally high price")
+    assert spike["outcome"] == "happened" and "quarter-hours" in spike["outcome_note"]
+
+
+def test_a_revision_is_judged_against_the_actual_price(client):
+    revision = situation(client, "forecast_changed")
+    assert revision["outcome"] in ("happened", "did_not_happen") and "actual price" in revision["outcome_note"]
+
+
+def test_an_outcome_waits_until_the_prices_are_usable(client):
+    raised_before_the_window = "2026-10-23T09:00:00Z"
+    spike = situation(client, "spike_risk", as_of=raised_before_the_window)
+    assert spike["outcome"] == "pending" and spike["outcome_note"] is None
+
+
+def test_situations_that_claim_nothing_are_not_judged(client):
+    for kind in ("high_uncertainty", "conflicting_signals", "stale_data"):
+        assert situation(client, kind)["outcome"] == "not_applicable"
+
+
+def test_history_never_looks_past_the_viewing_time(client):
+    as_of = "2026-10-24T00:00:00Z"
+    body = client.get("/api/alerts/history", params={"as_of": as_of, "to": "2026-10-29T00:00:00Z"}).json()
+    assert max(h["origin_utc"] for h in body["hours"]) <= as_of
+    assert max(s["last_origin_utc"] for s in body["situations"]) <= as_of
+
+
+def test_hindsight_gives_each_quarter_hour_once_at_the_chosen_lead_time(client, repo):
+    params = {"as_of": "2026-10-28T20:00:00Z", "from": "2026-10-23T00:00:00Z", "to": "2026-10-24T00:00:00Z"}
+    near = client.get("/api/hindsight", params={**params, "lead_hours": 1}).json()
+    far = client.get("/api/hindsight", params={**params, "lead_hours": 10}).json()
+    times = [p["delivery_start_utc"] for p in near["points"]]
+    assert len(times) == 96 and len(set(times)) == 96 and times == sorted(times)
+    assert near["lead_hours"] == 1 and all(p["actual"] is not None and p["spot"] is not None for p in near["points"])
+    made_10_hours_ahead = repo.primary[(repo.primary["delivery_start_utc"] == pd.Timestamp("2026-10-23T13:00:00Z"))
+                                       & (repo.primary["step"] == 37)]
+    by_time = {p["delivery_start_utc"]: p for p in far["points"]}
+    assert by_time["2026-10-23T13:00:00Z"]["p50"] == pytest.approx(made_10_hours_ahead["p50"].iloc[0], abs=0.01)
+
+
+def test_hindsight_never_shows_a_later_forecast_or_price(client):
+    as_of = pd.Timestamp("2026-10-23T07:00:00Z")
+    body = client.get("/api/hindsight", params={"as_of": iso(as_of), "to": "2026-10-29T00:00:00Z", "lead_hours": 2}).json()
+    times = pd.to_datetime([p["delivery_start_utc"] for p in body["points"]], utc=True)
+    assert times.max() <= as_of + pd.Timedelta(hours=2)
+    known = [p for p in body["points"] if p["actual"] is not None]
+    assert pd.Timestamp(known[-1]["delivery_start_utc"]) == as_of - pd.Timedelta(minutes=75)
+
+
+def test_hindsight_rejects_a_lead_time_outside_the_horizon(client):
+    assert client.get("/api/hindsight", params={"lead_hours": 11}).status_code == 422
 
 
 def test_every_model_feature_has_a_label():
@@ -235,8 +336,15 @@ def test_real_periods_use_the_out_of_sample_model_for_validation(real_client):
 
 
 @needs_real
-def test_real_data_never_loads_spot(real_repo):
-    assert "nordpool" not in set(real_repo.observations["source"])
+def test_real_spot_is_served_only_from_its_first_usable_origin(real_client, real_repo):
+    usable = spot_usable_from(real_repo)
+    for as_of in (pd.Timestamp("2026-09-20T10:00:00Z"), pd.Timestamp("2026-10-20T10:00:00Z"), pd.Timestamp("2026-10-20T11:00:00Z")):
+        window = {"as_of": iso(as_of), "from": iso(as_of - pd.Timedelta(days=1)), "to": iso(as_of + pd.Timedelta(days=3))}
+        points = real_client.get("/api/actuals", params=window).json()["points"]
+        steps = real_client.get("/api/forecast", params={"as_of": iso(as_of)}).json()["steps"]
+        shown = [p["delivery_start_utc"] for p in [*points, *steps] if p["spot"] is not None]
+        assert shown and (usable.loc[pd.to_datetime(shown, utc=True)] <= as_of).all()
+        assert all(s["spot"] is not None for s in steps), "spot is published at least 10 hours ahead"
 
 
 @needs_real
@@ -245,7 +353,7 @@ def test_real_actuals_match_the_organisers_rule(real_client, real_repo):
     body = real_client.get("/api/actuals", params={"as_of": iso(as_of), "from": "2026-10-19T00:00:00Z",
                                                    "to": "2026-10-22T00:00:00Z"}).json()
     usable = real_repo.observations.query("series_id == 'fi_imbalance_price'").set_index("timestamp_utc")["first_usable_origin_utc"]
-    shown = pd.to_datetime([p["delivery_start_utc"] for p in body["points"]], utc=True)
+    shown = pd.to_datetime([p["delivery_start_utc"] for p in body["points"] if p["imbalance_price"] is not None], utc=True)
     assert (usable.loc[shown] <= as_of).all() and shown.max() == as_of - pd.Timedelta(minutes=75)
 
 
