@@ -47,6 +47,8 @@ frontend/screenshots/
 # Agent skills: third-party, installed locally from skills-lock.json (sources and hashes), not committed
 .agents/skills/
 .claude/skills/
+# Claude Code worktrees (separate checkouts of this repo)
+.claude/worktrees/
 
 # OS
 .DS_Store
