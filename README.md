@@ -64,16 +64,19 @@ uv run python -m tools.cli ingest fingrid --datasets 75 --start 2026-05-31 --end
 uv run python -m tools.cli ingest openmeteo --models ecmwf_ifs --group wind
 uv run python -m tools.cli ingest openmeteo --models metno_nordic --group wind
 uv run python -m tools.cli ingest openmeteo --models metno_nordic --group pop
-# 2. The two members: features, train (val + final), score, test export, leakage check
-uv run python -m tools.cli pipeline --config tools/training/configs/lgbm_v4s.yaml --set v4
-uv run python -m tools.cli pipeline --config tools/training/configs/lgbm_v4ms.yaml --set v4m
-# 3. Average them, then apply the validation-fitted spike shift
-uv run python -m tools.eval.ensemble --name ens_v4s_v4ms --members lgbm_v4s lgbm_v4ms --period val
-uv run python -m tools.eval.ensemble --name ens_v4s_v4ms --members lgbm_v4s lgbm_v4ms --period test
-uv run python -m tools.eval.spike_shift --model ens_v4s_v4ms --apply
+# 2. Feature tables, then the two structural mixture members (train val + final, score, test export)
+uv run python -m tools.cli features --set v4
+uv run python -m tools.cli features --set v4m
+uv run python -m tools.training.mixture_pipeline --config tools/training/configs/mix_v4b.yaml
+uv run python -m tools.training.mixture_pipeline --config tools/training/configs/mix_v4mb.yaml
+# 3. Average them, then apply the validation-fitted spike shift and band widths
+uv run python -m tools.eval.ensemble --name ens_mix --members mix_v4b mix_v4mb --period val
+uv run python -m tools.eval.ensemble --name ens_mix --members mix_v4b mix_v4mb --period test
+uv run python -m tools.eval.spike_shift --model ens_mix --apply
+uv run python -m tools.eval.band_width --model ens_mix_spk --apply
 ```
 
-The submission is `static_data/work/submissions/ens_v4s_v4ms_spk_test.csv` (submit it as
+The submission is `static_data/work/submissions/ens_mix_spk_bw_test.csv` (submit it as
 `forecast_backtest.csv`); every step runs the organiser's validator or scorer. More commands:
 `tools/README.md`. Dashboard: `backend/api/README.md` (API, runs on mock data without licensed files)
 and `frontend/README.md`. Data sources and licences: `docs/SOURCES_AND_LICENCES.md`.
