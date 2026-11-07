@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 
 import type { ActualPoint, HindsightPoint } from "@/lib/api/client";
 import { type HindsightRow, HindsightView } from "@/lib/chart/hindsight-view";
+import { upToLastActual } from "@/lib/forecast";
 import { formatClock, formatDate, formatDayRange, formatPrice, formatPriceRange, fromUnixSeconds, toUnixSeconds } from "@/lib/format";
 
 type Field = { key: string; label: string; swatch: string; read: (row: HindsightRow) => string };
@@ -43,9 +44,11 @@ export default function HindsightChart({
   const view = useRef<HindsightView | null>(null);
   const latest = useRef<HindsightRow | null>(null);
 
+  const happened = useMemo(() => upToLastActual(points), [points]);
+
   const rows = useMemo(() => {
     const spot = new Map(observed.map((point) => [point.delivery_start_utc, point.spot]));
-    return points.map((point) => ({
+    return happened.map((point) => ({
       time: toUnixSeconds(point.delivery_start_utc) as HindsightRow["time"],
       actual: point.actual,
       spot: spot.get(point.delivery_start_utc) ?? null,
@@ -53,7 +56,7 @@ export default function HindsightChart({
       p50: point.p50,
       p90: point.p90,
     }));
-  }, [points, observed]);
+  }, [happened, observed]);
 
   useEffect(() => {
     if (!host.current) return;
@@ -71,8 +74,8 @@ export default function HindsightChart({
     writeReadout(readout.current, latest.current);
   }, [rows]);
 
-  const first = points[0]?.delivery_start_utc;
-  const last = points.at(-1)?.delivery_start_utc;
+  const first = happened[0]?.delivery_start_utc;
+  const last = happened.at(-1)?.delivery_start_utc;
   const span = first && last ? formatDayRange(first, last) : "this period";
 
   return (

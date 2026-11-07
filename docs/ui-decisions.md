@@ -28,7 +28,7 @@ Needed: 4.5:1 for text, 3:1 for UI and chart marks.
 | `--color-down` | `#007a5e` | 4.74 | 5.32 | Down-regulation, low price |
 | `--color-up-bg` | `#f6e3dc` | | | `--color-up` on it: 5.18 |
 | `--color-down-bg` | `#e0f1ea` | | | `--color-down` on it: 4.55 |
-| `--color-warning` | `#7a5a0a` | 5.68 | 6.37 | On `#f6ecd2`: 5.42 |
+| `--color-warning` | `#7a5a0a` | 5.68 | 6.37 | On `#fde9a0`: 5.26 |
 | `--color-info` | `#4a5a6a` | 6.31 | 7.09 | On `#e6e9ec`: 5.82 |
 | `--color-error-text` | `#b82a14` | 5.53 | 6.21 | On `#fbe6e1`: 5.18 |
 | `--color-focus` | stone | 8.24 | 9.26 | Light surfaces |
@@ -151,7 +151,7 @@ The prompt ranks above `DESIGN.md`, which ranks above skills.
   change % column was tried and removed the same day.
 - **Hindsight follows the Now layout**, team decision, 7 Nov. Left (66 %): the diagnostic scores as the
   same quiet strip as the key figures (`StatStrip`, short labels with the full metric name on hover, "53%
-  better" against the baseline, said once in the caption), then Forecast vs actual with the Now chart's
+  better" against the baseline, said once in the strip's title), then Forecast vs actual with the Now chart's
   series, names and colours: Actual (ink with a fade), Spot (`--color-chart-spot`, from `/api/actuals` for
   the same window), Forecast (gold) and Likely range (band); the dashed baseline line was dropped as too
   busy, the baseline lives on in the strip. Previous day / week / month is a full-width row under it. Right (34 %, resizable): Situations raised as a full-height box, each situation
@@ -181,6 +181,28 @@ The prompt ranks above `DESIGN.md`, which ranks above skills.
   On wide screens the forecast chart is on the left and that panel on the right; stacked, it stays first.
 - **Hindsight** drops the Error by hours ahead chart, team decision, 7 Nov. Forecast vs actual takes the full
   width. The API still returns the scores by hour ahead.
+- **Situation levels are red and yellow**, team decision, 7 Nov. Review is `--color-error-text` on
+  `--color-error-bg`, Watch is `--color-warning` on `--color-warning-bg`, which moved from `#f6ecd2` to
+  `#fde9a0` because the old value read as tan on the cream theme. The `--color-up` red is not used: it means
+  a rising price. Each badge keeps its icon and word, so colour is never the only signal. The chart's shade
+  for the selected situation follows the level, as a see-through tint: an opaque fill hid the likely range
+  drawn under it.
+- **Highlighted titles**, team decision, 7 Nov. "What to check now", "Situations raised" and "Official
+  validation scores" use `PanelHeader highlight`: 16 px ink on a `--color-fill` band (14.76). The band is
+  neutral because red and yellow mark situation levels. Other panel titles stay quiet.
+- **Hindsight's caption is gone**, team decision, 7 Nov. The line under the scores was removed. Its job moved
+  to the strip's visible title, "Diagnostic scores vs baseline", which keeps the figures labelled as
+  diagnostics beside the official ones (rule 5). The API still returns the note.
+- **P10–P90 coverage left the score strip**, team decision, 7 Nov. It stays as a row in the official table.
+  `StatStrip` now shares its row equally among any number of figures, so four fill Hindsight's strip and the
+  Now screen keeps five.
+- **Score names**, team decision, 7 Nov. "Exceptional prices" and "Direction" became "Spike error" and
+  "Direction error", in the strip and the official table, because the old names read as topics, not scores.
+  The full names keep "(Brier)". Brier scores have no unit, so these two show plain numbers.
+- **Hindsight's chart shows only what happened**, team decision, 7 Nov. The imbalance price arrives about an
+  hour late, so the last four quarter-hours before the viewing time had a forecast and no actual, which read
+  as a forecast into the future. Every line now ends at the last known actual (`upToLastActual`). Gaps earlier
+  in the period stay gaps, and the API is unchanged.
 
 ## Libraries beyond the prompt's list
 

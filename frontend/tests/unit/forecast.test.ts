@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import type { Changes, Forecast, ForecastStep } from "@/lib/api/client";
+import type { Changes, Forecast, ForecastStep, HindsightPoint } from "@/lib/api/client";
 import { exposure } from "@/lib/exposure";
-import { directionOf, evidenceItems, headline, rankDrivers, revisionTrail, spread, stepsInWindow } from "@/lib/forecast";
+import { directionOf, evidenceItems, headline, rankDrivers, revisionTrail, spread, stepsInWindow, upToLastActual } from "@/lib/forecast";
 
 const WIND = { id: "wind_fc", label: "Wind power forecast" };
 const LOAD = { id: "cons_fc", label: "Consumption forecast" };
@@ -60,6 +60,37 @@ describe("windows", () => {
     const window = { start: "2026-10-23T12:15:00Z", end: "2026-10-23T12:30:00Z" };
     expect(stepsInWindow(steps, window).map((s) => s.step)).toEqual([2]);
     expect(stepsInWindow(steps, null)).toHaveLength(3);
+  });
+});
+
+describe("upToLastActual", () => {
+  const points = (...actuals: (number | null)[]): HindsightPoint[] =>
+    actuals.map((actual, index) => ({
+      delivery_start_utc: step(index).delivery_start_utc,
+      p10: 20,
+      p50: 40,
+      p90: 80,
+      baseline_p50: null,
+      actual,
+      spot: 30,
+    }));
+
+  it("ends the chart at the last price that is known", () => {
+    const shown = upToLastActual(points(50, 60, null, null));
+    expect(shown.map((point) => point.actual)).toEqual([50, 60]);
+  });
+
+  it("keeps a gap earlier in the period as a gap", () => {
+    const shown = upToLastActual(points(50, null, 70, null));
+    expect(shown.map((point) => point.actual)).toEqual([50, null, 70]);
+  });
+
+  it("leaves a period with every price known as it is", () => {
+    expect(upToLastActual(points(50, 60))).toHaveLength(2);
+  });
+
+  it("shows nothing when no price is known yet", () => {
+    expect(upToLastActual(points(null, null))).toEqual([]);
   });
 });
 

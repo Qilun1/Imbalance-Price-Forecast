@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { ActualPoint, Performance, Scores } from "@/lib/api/client";
 import { queries } from "@/lib/api/queries";
 import { safeStorage, useIsWide } from "@/lib/browser";
-import { addHours, formatBetter, formatCount, formatPercent, formatScore, PRICE_UNIT } from "@/lib/format";
+import { addHours, formatBetter, formatCount, formatScore, PRICE_UNIT } from "@/lib/format";
 import { useViewingTime } from "@/lib/realtime/viewing-time";
 
 import { Choice } from "./choice";
@@ -56,21 +56,21 @@ function useUrlChoice<T extends string>(name: string, allowed: readonly T[], fal
 const METRICS: readonly { key: keyof Scores; label: string; short: string; digits: number; unit?: boolean }[] = [
   { key: "mae_p50", label: "Price error (MAE)", short: "Price error", digits: 2, unit: true },
   { key: "calibration_pinball_mean", label: "Uncertainty (pinball)", short: "Uncertainty", digits: 2, unit: true },
-  { key: "brier_spike_mean", label: "Exceptional prices (Brier)", short: "Exceptional prices", digits: 3 },
-  { key: "brier_direction", label: "Direction (Brier)", short: "Direction", digits: 3 },
+  { key: "brier_spike_mean", label: "Spike error (Brier)", short: "Spike error", digits: 3 },
+  { key: "brier_direction", label: "Direction error (Brier)", short: "Direction error", digits: 3 },
 ];
 
 const COVERAGE_LABEL = "P10–P90 coverage";
-const COVERAGE_TARGET = 0.8;
-const STRIP_LABELS = [...METRICS.map((metric) => metric.short), COVERAGE_LABEL];
+const STRIP_LABELS = METRICS.map((metric) => metric.short);
+const STRIP_HEADING = "Diagnostic scores vs baseline";
 
-/** The diagnostic scores as one strip, the same look as the key figures on the Now screen. */
+/** The diagnostic scores as one strip, the same look as the key figures on the Now screen. Rule 5: the title keeps them labelled as diagnostics. */
 function ScoreStrip({ performance }: { performance: Performance }) {
   const model = performance.diagnostic.model?.overall;
   const baseline = performance.diagnostic.baseline?.overall;
   if (!model) return null;
   return (
-    <StatStrip label="Diagnostic scores">
+    <StatStrip label={STRIP_HEADING} heading={STRIP_HEADING}>
       {METRICS.map(({ key, label, short, digits, unit }) => {
         const value = model[key] as number | null;
         const reference = baseline?.[key] as number | null | undefined;
@@ -84,7 +84,6 @@ function ScoreStrip({ performance }: { performance: Performance }) {
           />
         );
       })}
-      <Stat label={COVERAGE_LABEL} value={formatPercent(model.coverage_p10_p90)} detail={`Target about ${formatPercent(COVERAGE_TARGET)}`} />
     </StatStrip>
   );
 }
@@ -147,14 +146,9 @@ export function HindsightScreen() {
       className="h-auto min-h-fit shrink-0"
       isEmpty={(data) => !data.diagnostic.model}
       empty={null}
-      skeleton={<StatStripSkeleton labels={STRIP_LABELS} />}
+      skeleton={<StatStripSkeleton labels={STRIP_LABELS} heading={STRIP_HEADING} />}
     >
-      {(data) => (
-        <div className="flex flex-col gap-1.5">
-          <ScoreStrip performance={data} />
-          <p className="px-1 text-xs text-muted-foreground">Better and worse compare with the baseline. {data.diagnostic.note}</p>
-        </div>
-      )}
+      {(data) => <ScoreStrip performance={data} />}
     </QueryState>
   );
 
@@ -171,7 +165,7 @@ export function HindsightScreen() {
       <PanelBody className="pb-2">
         <QueryState
           query={hindsight}
-          isEmpty={(data) => data.points.length === 0}
+          isEmpty={(data) => !data.points.some((point) => point.actual !== null)}
           empty={
             <PanelMessage icon={CircleDashed} title="Nothing to compare yet">
               Move the viewing time later, or choose a longer period.
@@ -197,7 +191,7 @@ export function HindsightScreen() {
 
   const situationsBox = (
     <Panel label="Situations raised in this period" className="h-full">
-      <PanelHeader title="Situations raised" note={`${formatCount(situations.length)} in this period`} />
+      <PanelHeader title="Situations raised" highlight note={`${formatCount(situations.length)} in this period`} />
       <PanelBody className="px-0 pb-0">
         <QueryState
           query={history}
@@ -212,13 +206,13 @@ export function HindsightScreen() {
           {() => <SituationLog situations={situations} />}
         </QueryState>
       </PanelBody>
-      <section aria-labelledby="official-scores-title" className="shrink-0 border-t border-hairline-soft px-2 pt-3 pb-2">
-        <h2 id="official-scores-title" className="eyebrow px-2 pb-1 text-stone">
-          Official validation scores
-        </h2>
-        <QueryState query={performance} className="h-auto min-h-fit" skeleton={<SkeletonLines rows={5} className="px-2" />}>
-          {(data) => <OfficialTable performance={data} />}
-        </QueryState>
+      <section aria-label="Official validation scores" className="shrink-0 border-t border-hairline-soft pb-2">
+        <PanelHeader title="Official validation scores" highlight />
+        <div className="px-2">
+          <QueryState query={performance} className="h-auto min-h-fit" skeleton={<SkeletonLines rows={5} className="px-2" />}>
+            {(data) => <OfficialTable performance={data} />}
+          </QueryState>
+        </div>
       </section>
     </Panel>
   );

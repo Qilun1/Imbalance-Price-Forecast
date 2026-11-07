@@ -1,5 +1,5 @@
 /** Reading a forecast: the plain calculations behind the KPI row, drivers and revision trail. */
-import type { Alert, Changes, Driver, Forecast, ForecastStep } from "@/lib/api/client";
+import type { Alert, Changes, Driver, Forecast, ForecastStep, HindsightPoint } from "@/lib/api/client";
 
 export const STEPS_PER_HOUR = 4;
 
@@ -33,6 +33,14 @@ export function windowOf(alert: Alert): { start: string; end: string } {
 
 export function stepsInWindow(steps: readonly ForecastStep[], window: { start: string; end: string } | null) {
   return window ? steps.filter((step) => isInWindow(step.delivery_start_utc, window)) : [...steps];
+}
+
+/**
+ * Hindsight shows only what has happened. Prices are published after a delay, so the last quarter-hours
+ * before the viewing time have a forecast and no actual yet; those are cut. A gap earlier stays a gap.
+ */
+export function upToLastActual(points: readonly HindsightPoint[]): readonly HindsightPoint[] {
+  return points.slice(0, points.findLastIndex((point) => point.actual !== null) + 1);
 }
 
 const mean = (values: readonly number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;

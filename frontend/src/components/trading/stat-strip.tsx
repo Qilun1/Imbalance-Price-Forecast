@@ -4,9 +4,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatEuro } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-/** Columns follow the strip's own width (a container query), since it shares the row with a side box. */
+/**
+ * Columns follow the strip's own width (a container query), since it shares the row with a side box.
+ * Wide enough, the figures share one row equally, however many there are.
+ */
 const STRIP = "@container shrink-0 rounded-lg border border-hairline-soft bg-card px-4 py-2.5";
-const GRID = "grid grid-cols-2 gap-x-4 gap-y-2.5 @lg:grid-cols-3 @xl:grid-cols-5";
+const GRID = "grid grid-cols-2 gap-x-4 gap-y-2.5 @lg:grid-cols-3 @xl:grid-cols-none @xl:grid-flow-col @xl:auto-cols-fr";
+const HEADING = "eyebrow pb-2 text-stone";
 
 /** One figure in the strip: quiet label, plain large number, short context. Styled after a market quote line. */
 export function Stat({
@@ -37,19 +41,21 @@ export function Stat({
   );
 }
 
-/** A row of figures in one quiet box. */
-export function StatStrip({ label, children }: { label: string; children: ReactNode }) {
+/** A row of figures in one quiet box. `heading` adds a visible title where the figures need naming. */
+export function StatStrip({ label, heading, children }: { label: string; heading?: string; children: ReactNode }) {
   return (
     <section aria-label={label} className={STRIP}>
+      {heading ? <h2 className={HEADING}>{heading}</h2> : null}
       <div className={GRID}>{children}</div>
     </section>
   );
 }
 
-/** The strip's loading state, keeping each label so the layout does not jump. */
-export function StatStripSkeleton({ labels }: { labels: readonly string[] }) {
+/** The strip's loading state, keeping each label and the heading so the layout does not jump. */
+export function StatStripSkeleton({ labels, heading }: { labels: readonly string[]; heading?: string }) {
   return (
     <div className={STRIP} aria-hidden>
+      {heading ? <p className={HEADING}>{heading}</p> : null}
       <div className={GRID}>
         {labels.map((label) => (
           <Stat key={label} label={label} value={<Skeleton className="my-1 h-5 w-20" />} detail={<Skeleton className="h-3 w-24" />} />
