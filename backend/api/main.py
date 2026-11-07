@@ -7,13 +7,15 @@ Set IMBALANCE_DATA_MODE=real to serve the pipeline's forecasts; the default is i
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 from threading import Thread
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from backend.api.repository import OutOfRange, get_repository
-from backend.api.routes import actuals, alerts, forecast, hindsight, meta, performance
+from backend.api.routes import actuals, alerts, forecast, hindsight, meta, notes, performance, umm
 
 
 @asynccontextmanager
@@ -25,8 +27,14 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Imbalance price forecast API", version="0.1.0", lifespan=lifespan)
 
-for module in (meta, forecast, actuals, alerts, performance, hindsight):
+for module in (meta, forecast, actuals, alerts, notes, performance, hindsight, umm):
     app.include_router(module.router, prefix="/api")
+
+
+# Plain HTML/CSS/JS mockup of the notification chat (mockup/), separate from the React frontend.
+MOCKUP_DIR = Path(__file__).resolve().parents[2] / "mockup"
+if MOCKUP_DIR.is_dir():
+    app.mount("/mockup", StaticFiles(directory=MOCKUP_DIR, html=True), name="mockup")
 
 
 @app.exception_handler(OutOfRange)

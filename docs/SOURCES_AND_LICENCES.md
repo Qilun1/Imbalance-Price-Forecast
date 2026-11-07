@@ -1,8 +1,9 @@
 # Data sources, services and components
 
 Team WeatherSensAI, Since AI 2026, Turku Energia challenge. Checked on 7 Nov 2026 against each
-provider's terms (links below). The submitted forecast is `ens_v4s_v4ms` with a spike shift: the mean of
-models `lgbm_v4s` and `lgbm_v4ms`, with one logit shift per spike class fitted on validation.
+provider's terms (links below). The submitted forecast is `ens_mix` with a spike shift: the mean of the
+structural mixture models `mix_v4b` (feature set v4, ECMWF) and `mix_v4mb` (feature set v4m, MET
+Nordic), with one logit shift per spike class fitted on validation.
 
 Every time-stamped input reaches the models only through the store's availability-masked reader
 (`backend/imbalance/`). Each row is usable from its `first_usable_origin_utc`. For sources we added,
@@ -17,11 +18,11 @@ up to the next full hour (AGENTS.md rule 4).
 | Organiser package: ENTSO-E Transparency Platform | SE1 / SE3 / EE imbalance prices (17.1.g), SE1 / SE3 / EE day-ahead load forecasts (6.1.b), FI-EE day-ahead capacity (11.1) | CC BY 4.0 (free re-use list); organiser converted to UTC and 15 min | Organiser's `first_usable_origin_utc`, unchanged | both members |
 | Organiser package: Nord Pool | Finnish day-ahead spot price | Licensed to Turku Energia for the hackathon only; see section 4 | Organiser's `first_usable_origin_utc`, unchanged | both members (target is defined as imbalance minus spot) |
 | Fingrid Open Data API (we added) | Wind power generation, 15 min (dataset 75) | CC BY 4.0 | 60 min after the end of the quarter-hour | both members (observed wind error vs dataset 246) |
-| ECMWF IFS 9 km via the Open-Meteo Single Runs API | 100 m wind speed, 2 m temperature, every 00/06/12/18 UTC run, at about 10 wind-site points | ECMWF data: CC BY 4.0. Open-Meteo: CC BY 4.0 data; free API for non-commercial use only | Run init + 8 h (measured 6 h 48 min + 10 min Open-Meteo advice, 7 Nov 2026) | `lgbm_v4s` |
-| MET Nordic (MET Norway, MEPS 2.5 km post-processed) via the Open-Meteo Single Runs API | 100 m wind speed, 2 m temperature, 00/06/12/18 UTC runs | MET Norway data: CC BY 4.0 / NLOD 2.0. Open-Meteo terms as above | Run init + 2 h (measured 34 min + 10 min advice, 7 Nov 2026) | `lgbm_v4ms` |
+| ECMWF IFS 9 km via the Open-Meteo Single Runs API | 100 m wind speed, 2 m temperature, every 00/06/12/18 UTC run, at about 10 wind-site points | ECMWF data: CC BY 4.0. Open-Meteo: CC BY 4.0 data; free API for non-commercial use only | Run init + 8 h (measured 6 h 48 min + 10 min Open-Meteo advice, 7 Nov 2026) | `mix_v4b` |
+| MET Nordic (MET Norway, MEPS 2.5 km post-processed) via the Open-Meteo Single Runs API | 100 m wind speed, 2 m temperature, 00/06/12/18 UTC runs | MET Norway data: CC BY 4.0 / NLOD 2.0. Open-Meteo terms as above | Run init + 2 h (measured 34 min + 10 min advice, 7 Nov 2026) | `mix_v4mb` |
 | OpenStreetMap via the Overpass API | Wind turbine positions and rated outputs in Finland, clustered to about 10 weighted points (`tools/ingest/windsites.py`) | ODbL 1.0, © OpenStreetMap contributors | Static metadata (snapshot 6 Nov 2026) | both members (NWP sampling points and weights) |
 | Renewables Finland (Suomen Uusiutuvat ry), wind statistics 30 Jun 2026 | Total installed wind capacity (9,535 MW) to scale the OSM capacities; regional split for the fallback site list | No licence stated on the publication; used as cited factual figures. **Reuse terms to be confirmed** | Static | both members |
-| Statistics Finland | Approximate regional populations (about 2024, rounded) to weight temperature by heating demand (`tools/ingest/popsites.py`) | CC BY 4.0 | Static | `lgbm_v4ms` |
+| Statistics Finland | Approximate regional populations (about 2024, rounded) to weight temperature by heating demand (`tools/ingest/popsites.py`) | CC BY 4.0 | Static | `mix_v4mb` |
 | Calendar | Hour, weekday, holidays | Not applicable | Always usable (organiser rule) | both members |
 
 Validation actuals (`actuals_validation.csv`, organiser) are used for scoring and to fit the spike
@@ -33,6 +34,9 @@ shift. They are never used for the test period.
 |---|---|---|---|
 | Fingrid Open Data API | Nuclear (188) and hydro (191) real-time production, 3 min averaged to 15 min, 60 min lag | CC BY 4.0 | Ingested only; no feature set in this repo uses them |
 | Fingrid Open Data API, history since 20 Mar 2025 (`tools/ingest/fingrid_history.py`) | 319, 244, 106, 375, 376, 369, 347-350, 342, 75 | CC BY 4.0 | Imbalance price rebuild check (`tools/eval/rebuild_price.py`) and the long-history direction head (sets v5 / v5m, not submitted). Pre-June imbalance price is never a training target |
+| Nord Pool REMIT UMM API (`tools/ingest/umm.py`) | Urgent market messages for Finland: production, consumption and transmission unavailability, every message version with its publication time | Public REMIT inside information; Nord Pool API terms apply (free API). **Reuse terms to be confirmed** | Feature sets v8 / v8m (not submitted: no gain) and dashboard alerts with a link to the message. Each version usable from the first full hour after publication + 5 min |
+| Statistics Finland, Energy prices (PxWeb tables 13p7, 12gb; `backend/fuel/`) | Reference fuel prices for power and heat production (forest chips, milled peat, natural gas), monthly / quarterly, EUR/MWh | CC BY 4.0 | Operator fuel-cost panel only (not yet in the dashboard); never a model input |
+| OilPriceAPI (optional, `OILPRICEAPI_KEY`; else a manual value) | EU ETS allowance (EUA) spot price | Commercial API, free tier; **reuse terms to be confirmed** | Operator fuel-cost panel only; never a model input |
 | Fingrid package series extended past 2 Nov 2026 (319, 244, 106, 375, 376, 369, 124, 74) | Live dashboard only | CC BY 4.0 | Dashboard; never the backtest |
 
 Fingrid forecast datasets (165, 166, 241, 242, 245-248) are never fetched from the API: it keeps only
@@ -52,7 +56,7 @@ Versions are the ones pinned in `uv.lock` and `frontend/package-lock.json`.
 | NumPy | 2.5.4 | BSD-3-Clause (bundled parts 0BSD, MIT, Zlib, CC0-1.0) | Numerics |
 | PyArrow | 26.0.1 | Apache-2.0 | Parquet |
 | DuckDB | 2.0.0 | MIT | Local data store |
-| scikit-learn | 1.9.1 | BSD-3-Clause | Calibration diagnostics |
+| scikit-learn | 1.9.1 | BSD-3-Clause | Calibration diagnostics; event classifiers (logistic regression, isotonic regression for Venn–Abers calibration) |
 | SciPy | 1.18.1 | BSD-3-Clause | Dependency of scikit-learn |
 | requests | 2.34.2 | Apache-2.0 | HTTP ingest |
 | PyYAML | 6.0.3 | MIT | Model configs |

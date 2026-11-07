@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Imbalance Watch</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="bar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <div>
+        <h1>Imbalance Watch</h1>
+        <p class="sub" id="mode-note">Loading…</p>
+      </div>
+    </div>
+    <div class="clock" role="group" aria-label="Viewing time">
+      <button id="prev" class="ghost" title="One hour back" aria-label="One hour back">◀</button>
+      <div class="now">
+        <span class="label">Viewing time (Helsinki)</span>
+        <strong id="now-text">–</strong>
+      </div>
+      <button id="next" class="ghost" title="One hour forward" aria-label="One hour forward">▶</button>
+      <button id="play" class="primary" title="Replay hour by hour">Replay</button>
+      <input id="jump" type="datetime-local" aria-label="Jump to a viewing time">
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="charts" aria-label="Charts">
+      <article class="card">
+        <header class="card-head">
+          <h2>Imbalance price</h2>
+          <ul class="legend">
+            <li><i class="sw actual"></i>Realised</li>
+            <li><i class="sw p50"></i>Forecast P50</li>
+            <li><i class="sw band"></i>P10–P90</li>
+          </ul>
+        </header>
+        <svg id="price-chart" class="chart" role="img" aria-label="Imbalance price, realised and forecast"></svg>
+      </article>
+      <article class="card">
+        <header class="card-head">
+          <h2>Risk over the next 10 hours</h2>
+          <ul class="legend">
+            <li><i class="sw hi"></i>Spike high</li>
+            <li><i class="sw lo"></i>Spike low</li>
+            <li><i class="sw up"></i>Up-regulation</li>
+          </ul>
+        </header>
+        <svg id="risk-chart" class="chart small" role="img" aria-label="Probabilities per quarter-hour"></svg>
+      </article>
+      <p class="foot">Forecasts use only data usable at the viewing time. Highlights mark the window a chat
+        message is about.</p>
+    </section>
+
+    <aside class="chat card" aria-label="Notifications">
+      <header class="card-head">
+        <h2>Assistant</h2>
+        <button id="notify" class="ghost small-btn" title="Desktop notifications for new notes">Enable alerts</button>
+      </header>
+      <ol id="messages" class="messages" aria-live="polite"></ol>
+      <form id="ask" class="ask">
+        <input id="question" type="text" autocomplete="off"
+               placeholder="Ask: “what's going on?”, “why spike high?”, “clear highlight”">
+        <button class="primary" type="submit">Send</button>
+      </form>
+    </aside>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

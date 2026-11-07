@@ -13,7 +13,22 @@ from imbalance import store
 from imbalance.features import Store, build, feature_columns
 
 from tools.training.feature_table import load_feature_table
-from imbalance.features import HIST_SETS, WIND_OBS_SETS, load_hist
+from imbalance.features import HIST_SETS, SYSTEM_SETS, WIND_OBS_SETS, _umm_for, load_hist
+
+
+def rebuild(feature_set: str, long: pd.DataFrame, o: pd.Timestamp) -> pd.DataFrame:
+    """Feature rows of origin o, built from data that physically excludes every row not usable at o."""
+    visible = long[long["first_usable_origin_utc"] <= o]
+    nwp_tables = nwp2 = None
+    if feature_set != "v1":
+        from imbalance import nwp
+        nwp_tables = nwp.load_for(feature_set, visible_before=o)          # runs not yet usable are physically removed
+        nwp2 = nwp.load_second(feature_set, visible_before=o)              # second model, same removal
+    return build(Store(visible), pd.DatetimeIndex([o]), with_targets=False, nwp=nwp_tables,
+                 wind_obs=feature_set in WIND_OBS_SETS,
+                 hist=load_hist() if feature_set in HIST_SETS else None, nwp2=nwp2,
+                    system=feature_set in SYSTEM_SETS,
+                    umm=_umm_for(feature_set, visible_before=o))   # versions not yet usable physically removed   # its own check: hist_heads --check
 
 
 def check(feature_set: str = "v1", n: int = 60, seed: int = 0, origins: pd.DatetimeIndex | None = None) -> bool:
@@ -25,17 +40,7 @@ def check(feature_set: str = "v1", n: int = 60, seed: int = 0, origins: pd.Datet
     cols = feature_columns(table)
     bad = 0
     for o in sample:
-        visible = long[long["first_usable_origin_utc"] <= o]
-        nwp_tables = None
-        if feature_set != "v1":
-            from imbalance import nwp
-            nwp_tables = nwp.load_for(feature_set, visible_before=o)          # runs not yet usable are physically removed
-        nwp2 = None
-        if feature_set != "v1":
-            nwp2 = nwp.load_second(feature_set, visible_before=o)               # second model, same removal
-        ref = build(Store(visible), pd.DatetimeIndex([o]), with_targets=False, nwp=nwp_tables,
-                    wind_obs=feature_set in WIND_OBS_SETS,
-                    hist=load_hist() if feature_set in HIST_SETS else None, nwp2=nwp2)   # its own check: hist_heads --check
+        ref = rebuild(feature_set, long, o)
         used = table[table["forecast_origin_utc"] == o].sort_values("step")
         same = np.isclose(ref[cols].to_numpy(float), used[cols].to_numpy(float), equal_nan=True, rtol=0, atol=1e-9)
         if not same.all():

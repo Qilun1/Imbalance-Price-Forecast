@@ -39,6 +39,22 @@ uv run python -m tools.cli compare --models baseline-val lgbm_v1-val lgbm_v2-val
 uv run pytest
 ```
 
+## Event classifiers (`/api/notes`)
+
+Needs the v4 and v4m feature tables and the `lgbm_v4s(-val)` / `lgbm_v4ms(-val)` base models. Plan
+and design: `docs/plans/event_notes.md`.
+
+```powershell
+uv run python -m tools.cli alerts all          # build -> train (alerts-val, alerts) -> infer -> leakage
+uv run python -m tools.cli alerts evaluate     # model families on validation -> static_data/work/alerts/
+uv run python -m tools.training.event_rates    # event base rates on training data before validation
+```
+
+`alerts build` forecasts every training origin with base models trained only on targets published
+before its segment, so the classifiers never learn from in-sample forecasts. `alerts leakage`
+rebuilds the classifier inputs from data physically limited to each origin and requires equality.
+The model family per event is in `tools/training/configs/alerts.yaml`.
+
 ## External data (run on your own machine; needs internet)
 
 ```powershell

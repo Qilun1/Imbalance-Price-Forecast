@@ -85,6 +85,7 @@ class MixBundle:
     @classmethod
     def train(cls, name: str, df: pd.DataFrame, config: dict) -> "MixBundle":
         cols = config.get("features") or feature_columns(df)
+        cols = [c for c in cols if c not in set(config.get("drop_features", []))]
         reg = {**DEFAULT_REG, **config.get("regressor", {})}
         clf = {**DEFAULT_CLF, **config.get("classifier", {})}
         b = cls(name=name, features=cols)

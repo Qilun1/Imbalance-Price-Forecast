@@ -1,0 +1,16 @@
+# hmix_v4b: mix_v4b + out-of-sample long-history up-price tail heads (tools/training/hist_tails.py, histmix_pipeline.py)
+name: hmix_v4b
+feature_set: v4
+blocks: [[1, 8], [9, 40]]        # lead-time blocks with their own conditional heads (steps, inclusive)
+spikes: mixture        # spike probabilities from the mixture (alternatives: classifier, mean)
+widen: 1.4             # held-out check: chosen per validation week on the other four weeks -> 1.3-1.5 (tools: widen check in EVALUATION)
+regressor:
+  n_estimators: 150
+  learning_rate: 0.03
+  num_leaves: 31
+  min_child_samples: 200
+classifier:
+  n_estimators: 110
+  learning_rate: 0.03
+  num_leaves: 31
+  min_child_samples: 200
