@@ -1,7 +1,7 @@
 """Response shapes of the API. All timestamps are UTC; prices are EUR/MWh.
 
-No field here may ever hold a spot price or anything a spot price could be recovered from, such as a
-spot + 50 threshold (AGENTS.md rule 6). Spike risk is exposed as probabilities only.
+Spot fields are licensed data (AGENTS.md rule 6). The dashboard may show them, and they carry a value
+only from the row's first_usable_origin_utc, so at a viewing time they hold what was published by then.
 """
 from __future__ import annotations
 
@@ -31,6 +31,7 @@ class ForecastStep(BaseModel):
     p_none: float
     p_spike_high: float
     p_spike_low: float
+    spot: float | None
     drivers: list[Driver]
 
 
@@ -40,6 +41,7 @@ class Forecast(BaseModel):
     model: str
     data_cutoff_utc: datetime | None
     data_age_minutes: int | None
+    spot_known_until_utc: datetime | None
     steps: list[ForecastStep]
 
 
@@ -47,6 +49,7 @@ class ActualPoint(BaseModel):
     delivery_start_utc: datetime
     imbalance_price: float | None
     direction: Direction | None
+    spot: float | None
 
 
 class Actuals(BaseModel):

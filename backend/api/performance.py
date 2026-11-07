@@ -3,8 +3,7 @@
 official    the organiser's score.py results for the validation period, read as written. These are
             the numbers to quote.
 diagnostic  the same formulas over a chosen window, for the dashboard. Calculated by calling the
-            organiser's compute_metrics() unchanged, so the formulas cannot drift. Spike scores are
-            left out here, because they need the spot price, which the API never loads.
+            organiser's compute_metrics() unchanged, so the formulas cannot drift.
 
 Test-period diagnostics are for display only: they must never guide model choice, tuning or
 calibration (AGENTS.md rule 4).
@@ -16,7 +15,6 @@ import math
 import sys
 from functools import lru_cache
 
-import numpy as np
 import pandas as pd
 
 from imbalance.contract import SCORER, SPIKE_MARGIN
@@ -27,8 +25,8 @@ from backend.api.schemas import DiagnosticScores, HorizonScores, OfficialScores,
 
 OFFICIAL_NOTE = "Organiser's score.py, validation period, spike margin 50 EUR/MWh."
 DIAGNOSTIC_NOTE = ("Diagnostic, not an official score. Organiser's formulas over this window, using only prices "
-                   "usable at the viewing time. Spike scores need the spot price and are left out. Test-period "
-                   "results are for display only and must not guide model choice or tuning.")
+                   "usable at the viewing time. Test-period results are for display only and must not guide "
+                   "model choice or tuning.")
 STEPS_PER_HOUR = 4
 
 
@@ -67,7 +65,7 @@ def _window_scores(forecast: pd.DataFrame, actuals: pd.DataFrame, label: str) ->
     rows = forecast.merge(actuals, on="delivery_start_utc", how="inner")
     if rows.empty or rows["imbalance_price"].notna().sum() == 0:
         return None
-    rows = rows.assign(spot_price=np.nan)
+    rows = rows.rename(columns={"spot": "spot_price"})
     metrics = _organiser_metrics()
     by_hour = [HorizonScores(horizon_hour=int(hour), **_scores(metrics(group, SPIKE_MARGIN)))
                for hour, group in rows.groupby((rows["step"] - 1) // STEPS_PER_HOUR + 1, sort=True)]
