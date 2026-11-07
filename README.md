@@ -25,6 +25,7 @@ Other systems and details: `frontend/README.md`.
 | `backend/artifacts/` | Trained model versions (gitignored) |
 | `backend/infer_data/` | Inferred 10 h forecast sets, one row per model version, origin and step (gitignored) |
 | `frontend/` | Next.js dashboard, see `frontend/README.md` |
+| `mockup/` | Plain HTML/JS mockup of the notification chat on the event classifiers, served at `/mockup` (separate from `frontend/`) |
 | `static_data/` | Source data: raw pulls and the DuckDB store (gitignored, see its README) |
 | `tools/ingest/` | Fetch and normalise data into `static_data/` |
 | `tools/training/` | Model training and configs |
@@ -60,6 +61,30 @@ the ENTSO-E data comes ready-made in the starter package.
 The starter package data files (`inputs.parquet`, `inputs.csv`, `spot_nordpool.csv`,
 `actuals_validation.csv`, `quality_report.*`) go to `static_data/raw/starter/`: `ingest starter --src`
 copies them there (see below).
+
+### Agent skills (local only, not in git)
+
+The coding-agent skills in `.claude/skills/` (Claude Code) and `.agents/skills/` (other agents) are
+third-party, so they are gitignored. They used to be committed twice (610 of the repo's 721 files).
+`skills-lock.json` records each skill's source and content hash.
+
+**Heads-up when pulling:** the commit that untracked them (`e5be3de`) deletes your local copies on the
+next pull or merge, because git removes files that stop being tracked. Back them up first if you
+use them:
+
+```powershell
+Copy-Item -Recurse .claude\skills $env:TEMP\claude-skills-backup   # before pulling
+Copy-Item -Recurse $env:TEMP\claude-skills-backup .claude\skills   # after pulling
+```
+
+Or reinstall from the sources in `skills-lock.json` (the CLI asks which skills and agents):
+
+```bash
+npx skills add vercel-labs/agent-skills                 # deploy-to-vercel, vercel-*, web-design-guidelines, writing-guidelines
+npx skills add vercel-labs/agent-browser                # agent-browser
+npx skills add vercel-labs/skills                       # find-skills
+npx skills add jakubkrehel/make-interfaces-feel-better  # make-interfaces-feel-better
+```
 
 ## Reproduce the submission
 
