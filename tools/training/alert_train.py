@@ -206,8 +206,7 @@ def infer_periods() -> pd.DataFrame:
     val_origins = pd.date_range(VALIDATION_FIRST_ORIGIN, TEST_FIRST_ORIGIN - pd.Timedelta(hours=1), freq="h")
     frames = []
     for suffix, origins in (("-val", val_origins), ("", read_origins(TEST_ORIGINS))):
-        out = alert_inference.infer(f"{cfg['name']}{suffix}", f"{cfg['base_model']}{suffix}",
-                                    f"{cfg['challenger_model']}{suffix}", origins, base_feats, ch_feats)
+        out = alert_inference.infer(f"{cfg['name']}{suffix}", origins, base_feats, ch_feats)
         print(f"{cfg['name']}{suffix}: {len(origins)} origins -> {len(out):,} event rows")
         frames.append(out)
     return pd.concat(frames, ignore_index=True)

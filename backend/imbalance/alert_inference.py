@@ -17,6 +17,7 @@ import pandas as pd
 
 from . import alert_features, forecasts
 from .alert_model import AlertBundle
+from .features import build_table
 from .model import Bundle
 from .paths import INFER_DB
 
@@ -50,22 +51,47 @@ def confidence(width: np.ndarray, data_age_min: np.ndarray, p50_gap: np.ndarray)
     return np.where(low, "low", np.where(medium, "medium", "high"))
 
 
-def _forecast(model: str, features: pd.DataFrame, origins: pd.DatetimeIndex) -> pd.DataFrame:
+def _forecast(bundle: Bundle, features: pd.DataFrame, origins: pd.DatetimeIndex) -> pd.DataFrame:
     rows = features[features["forecast_origin_utc"].isin(origins)].reset_index(drop=True)
-    pred = Bundle.load(model).predict(rows)
+    missing = set(origins) - set(rows["forecast_origin_utc"])
+    if missing:
+        raise RuntimeError(f"{bundle.name}: no feature rows for {len(missing)} origins, e.g. {sorted(missing)[0]}")
+    pred = bundle.predict(rows)
     return pd.concat([rows[["forecast_origin_utc", "delivery_start_utc", "step"]], pred], axis=1)
 
 
-def infer(alert_model: str, base_model: str, challenger_model: str, origins: pd.DatetimeIndex,
-          base_features: pd.DataFrame, challenger_features: pd.DataFrame, write: bool = True,
-          path: Path = INFER_DB) -> pd.DataFrame:
-    """Event probabilities for every origin. Feature tables must cover the origins and the hour before."""
+def base_models_of(alerts: AlertBundle) -> tuple[str, str]:
+    """The base and challenger models a bundle was trained to read: "-val" models for the -val bundle,
+    so validation notes stay out of sample."""
+    suffix = "-val" if alerts.meta.get("variant") == "val" else ""
+    return f"{alerts.meta['base_model']}{suffix}", f"{alerts.meta['challenger_model']}{suffix}"
+
+
+def infer(alert_model: str, origins: pd.DatetimeIndex, base_features: pd.DataFrame | None = None,
+          challenger_features: pd.DataFrame | None = None, write: bool = True, path: Path = INFER_DB) -> pd.DataFrame:
+    """Event probabilities for every origin.
+
+    The base and challenger models come from the bundle's meta.json, so they always match what the
+    classifiers were trained on. Feature tables are built from the store (availability-masked) when not
+    given; they must cover the origins and the hour before each (for the revision inputs)."""
+    alerts = AlertBundle.load(alert_model)
+    base_name, challenger_name = base_models_of(alerts)
+    base_bundle, challenger_bundle = Bundle.load(base_name), Bundle.load(challenger_name)
     origins = pd.DatetimeIndex(origins)
     with_prev = origins.union(origins - HOUR)
-    base = _forecast(base_model, base_features, with_prev)
-    challenger = _forecast(challenger_model, challenger_features, origins)
+    if base_features is None:
+        base_features = build_table(with_prev, with_targets=False, feature_set=base_bundle.meta["feature_set"])
+    if challenger_features is None:
+        challenger_features = build_table(origins, with_targets=False,
+                                          feature_set=challenger_bundle.meta["feature_set"])
+    prev_available = with_prev[with_prev.isin(base_features["forecast_origin_utc"])]
+    base = _forecast(base_bundle, base_features, prev_available.union(origins))
+    challenger = _forecast(challenger_bundle, challenger_features, origins)
     X = alert_features.build(base_features, base, challenger, origins)
-    out = AlertBundle.load(alert_model).predict(X)
+    missing = [c for c in alerts.inputs if c not in X.columns]
+    if missing:
+        raise RuntimeError(f"{alert_model}: inputs missing at inference, e.g. {missing[:3]}")
+    out = alerts.predict(X)
     per_row = X.set_index(["forecast_origin_utc", "window"])[["f_data_age_min", "gap_p50_max"]]
     joined = per_row.reindex(pd.MultiIndex.from_frame(out[["forecast_origin_utc", "window"]]))
     out["confidence"] = confidence((out["p_hi"] - out["p_lo"]).to_numpy(), joined["f_data_age_min"].to_numpy(),
