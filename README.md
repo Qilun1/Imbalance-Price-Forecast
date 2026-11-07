@@ -69,13 +69,14 @@ uv run python -m tools.cli features --set v4
 uv run python -m tools.cli features --set v4m
 uv run python -m tools.training.mixture_pipeline --config tools/training/configs/mix_v4b.yaml
 uv run python -m tools.training.mixture_pipeline --config tools/training/configs/mix_v4mb.yaml
-# 3. Average them, then apply the validation-fitted spike shift
+# 3. Average them, then apply the validation-fitted spike shift and band widths
 uv run python -m tools.eval.ensemble --name ens_mix --members mix_v4b mix_v4mb --period val
 uv run python -m tools.eval.ensemble --name ens_mix --members mix_v4b mix_v4mb --period test
 uv run python -m tools.eval.spike_shift --model ens_mix --apply
+uv run python -m tools.eval.band_width --model ens_mix_spk --apply
 ```
 
-The submission is `static_data/work/submissions/ens_mix_spk_test.csv` (submit it as
+The submission is `static_data/work/submissions/ens_mix_spk_bw_test.csv` (submit it as
 `forecast_backtest.csv`); every step runs the organiser's validator or scorer. More commands:
 `tools/README.md`. Dashboard: `backend/api/README.md` (API, runs on mock data without licensed files)
 and `frontend/README.md`. Data sources and licences: `docs/SOURCES_AND_LICENCES.md`.
