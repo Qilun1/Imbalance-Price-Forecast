@@ -1,9 +1,10 @@
 """Read-only access to forecasts and actuals for the API.
 
 Two rules are enforced here, in one place, for every route:
-- Availability: actuals pass through the organiser's own rows_available_at(), so at viewing time
+- Availability: observed rows pass through the organiser's own rows_available_at(), so at viewing time
   `as_of` the API shows only what was usable then, and forecasts are limited to origins <= as_of.
-- Licence: only DISPLAY_SERIES is ever loaded, so the spot price never enters this process.
+- Licence: only DISPLAY_SERIES is ever loaded. It includes the spot price because the dashboard may show
+  it (AGENTS.md rule 6). Spot goes to the dashboard and nowhere else: never log or export it.
 
 Mock and real data use the same tables, so there is one code path and only the file differs.
 """
@@ -15,15 +16,15 @@ from functools import lru_cache
 import pandas as pd
 
 from imbalance import alert_inference, forecasts, store
-from imbalance.contract import DIRECTION_SERIES, SPOT_SERIES, TARGET_SERIES
+from imbalance.contract import DIRECTION_SERIES, SPOT_SERIES, STEP, TARGET_SERIES
 from imbalance.paths import ARTIFACTS_DIR
 from tools.eval.baseline import rows_available_at
 
+from backend.api.alerts import build_alerts
+from backend.api.schemas import Alert
 from backend.api.settings import Period, Settings, get_settings
 
-DISPLAY_SERIES = (TARGET_SERIES, DIRECTION_SERIES)
-if SPOT_SERIES in DISPLAY_SERIES:
-    raise RuntimeError("the spot price must never be served (AGENTS.md rule 6)")
+DISPLAY_SERIES = (TARGET_SERIES, DIRECTION_SERIES, SPOT_SERIES)
 
 DIRECTION_NAMES = {1.0: "up", -1.0: "down", 0.0: "none"}
 HOUR = pd.Timedelta(hours=1)
@@ -54,6 +55,8 @@ class Repository:
         self._challenger_by_origin = dict(tuple(self.challenger.groupby("forecast_origin_utc")))
         self.origins = pd.DatetimeIndex(sorted(self._primary_by_origin))
         self.observations = store.load_observations(list(DISPLAY_SERIES), settings.store_db)
+        self._spot_rows = self.observations[self.observations["series_id"] == SPOT_SERIES]
+        self._alerts_by_origin: dict[pd.Timestamp, list[Alert]] = {}
         self.event_probs = self._load("notes")
         self._notes_by_origin = dict(tuple(self.event_probs.groupby("forecast_origin_utc")))
         self.low_skill = {p.notes: _low_skill_events(p.notes) for p in settings.periods if p.notes}
@@ -117,9 +120,22 @@ class Repository:
         rows = self._notes_by_origin.get(origin)
         return None if rows is None else rows.reset_index(drop=True)
 
-    # ---------- actuals ----------
+    def alerts_at(self, origin: pd.Timestamp) -> list[Alert]:
+        """The alerts of one forecast. A past forecast never changes, so each is built once."""
+        if origin not in self._alerts_by_origin:
+            self._alerts_by_origin[origin] = build_alerts(self.forecast(origin), self.previous_forecast(origin),
+                                                         self.challenger_forecast(origin))
+        return self._alerts_by_origin[origin]
+
+    def prepare_alerts(self) -> None:
+        """Build every forecast's alerts ahead of the first history request."""
+        for origin in self.origins:
+            self.alerts_at(origin)
+
+    # ---------- observed values ----------
     def actuals(self, as_of: pd.Timestamp, start: pd.Timestamp | None = None, end: pd.Timestamp | None = None) -> pd.DataFrame:
-        """Price and direction usable at `as_of`, optionally for quarter-hours in [start, end)."""
+        """Price, direction and spot usable at `as_of`, optionally for quarter-hours in [start, end).
+        A quarter-hour can have spot and no realised price yet, so price and direction may be empty."""
         rows = self.observations
         if start is not None:
             rows = rows[rows["timestamp_utc"] >= start]
@@ -130,7 +146,20 @@ class Repository:
             "delivery_start_utc": wide.index,
             "imbalance_price": wide[TARGET_SERIES].to_numpy(dtype=float),
             "direction": wide[DIRECTION_SERIES].map(DIRECTION_NAMES).to_numpy(dtype=object),
+            "spot": wide[SPOT_SERIES].to_numpy(dtype=float),
         }).reset_index(drop=True)
+
+    def spot(self, as_of: pd.Timestamp, start: pd.Timestamp, end: pd.Timestamp) -> pd.Series:
+        """Spot prices usable at `as_of` for quarter-hours in [start, end), by delivery time."""
+        rows = self._spot_rows
+        wide = rows_available_at(rows[(rows["timestamp_utc"] >= start) & (rows["timestamp_utc"] < end)], as_of)
+        return wide[SPOT_SERIES] if SPOT_SERIES in wide else pd.Series(dtype=float)
+
+    def spot_known_until(self, as_of: pd.Timestamp) -> pd.Timestamp | None:
+        """End of the last quarter-hour whose spot price was published by `as_of`."""
+        rows = self._spot_rows
+        known = rows.loc[rows["first_usable_origin_utc"] <= as_of, "timestamp_utc"]
+        return known.max() + STEP if len(known) else None
 
     # ---------- periods ----------
     def period_origins(self, period: Period) -> pd.DatetimeIndex:
@@ -151,7 +180,13 @@ def _low_skill_events(model: str) -> frozenset[str]:
 @lru_cache
 def get_repository() -> Repository:
     settings = get_settings()
-    if settings.mode == "mock" and not settings.forecast_db.exists():
-        from backend.api.mock import generate
+    if settings.mode != "mock":
+        return Repository(settings)
+    from backend.api.mock import generate
+    if not settings.forecast_db.exists():
         generate(settings.forecast_db)
-    return Repository(settings)
+    repo = Repository(settings)
+    if repo.spot_known_until(repo.origins[-1]) is None or repo.challenger.empty:     # an older mock file
+        generate(settings.forecast_db)
+        repo = Repository(settings)
+    return repo

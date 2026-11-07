@@ -34,7 +34,7 @@ ALLOWED = [
     "static_data/README.md", "static_data/**/.gitkeep", "backend/infer_data/README.md",
     # frontend tooling config (not data)
     "frontend/package.json", "frontend/package-lock.json", "frontend/tsconfig*.json",
-    "frontend/*.config.json", "frontend/public/manifest.json",
+    "frontend/*.config.json", "frontend/public/manifest.json", "frontend/components.json",
     # agent skills: third-party config (not data)
     "skills-lock.json",
     ".agents/skills/vercel-optimize/references/docs-library.json",
