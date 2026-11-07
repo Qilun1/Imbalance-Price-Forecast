@@ -1,49 +1,91 @@
-/** Forecast against what happened over a past period, at one lead time. */
-import { createChart, type IChartApi, type ISeriesApi, LineSeries, LineStyle, LineType, type UTCTimestamp } from "lightweight-charts";
+/**
+ * Forecast against what happened over a past period, at one lead time. The same series, names and colours
+ * as the Now chart, so one legend reads both:
+ *
+ * - Actual: the realised imbalance price, a dark line with a soft fade under it.
+ * - Spot: Nord Pool spot, a violet line.
+ * - Forecast: the P50 made `lead` hours ahead, gold, with the P10-P90 likely range as a light band.
+ */
+import {
+  AreaSeries,
+  createChart,
+  type IChartApi,
+  type ISeriesApi,
+  LineSeries,
+  LineStyle,
+  LineType,
+  type UTCTimestamp,
+} from "lightweight-charts";
 
-import type { HindsightPoint } from "@/lib/api/client";
-import { toUnixSeconds } from "@/lib/format";
+import { formatPriceAxis } from "@/lib/format";
 
 import { StepBand } from "./primitives";
-import { baseOptions, color, PRICE_FORMAT, withAlpha } from "./theme";
+import { baseOptions, color, withAlpha } from "./theme";
 
-const at = (point: HindsightPoint) => toUnixSeconds(point.delivery_start_utc) as UTCTimestamp;
+export type HindsightRow = {
+  time: UTCTimestamp;
+  actual: number | null;
+  spot: number | null;
+  p10: number;
+  p50: number;
+  p90: number;
+};
 
 export class HindsightView {
   private readonly chart: IChartApi;
-  private readonly actual: ISeriesApi<"Line">;
+  private readonly actual: ISeriesApi<"Area">;
+  private readonly spot: ISeriesApi<"Line">;
   private readonly p50: ISeriesApi<"Line">;
-  private readonly baseline: ISeriesApi<"Line">;
   private readonly fan: StepBand;
+  private byTime = new Map<number, HindsightRow>();
 
-  constructor(host: HTMLElement) {
-    const gold = color("series-1");
-    this.chart = createChart(host, baseOptions());
-    this.chart.timeScale().applyOptions({ minBarSpacing: 0.05 });
+  constructor(host: HTMLElement, private readonly onCross: (row: HindsightRow | null) => void) {
+    const ink = color("ink");
+    const base = baseOptions();
+    this.chart = createChart(host, {
+      ...base,
+      grid: { vertLines: { visible: false }, horzLines: { color: withAlpha(color("chart-grid"), 0.6) } },
+      rightPriceScale: { borderVisible: false, tickMarkDensity: 6, scaleMargins: { top: 0.1, bottom: 0.08 } },
+      timeScale: { ...base.timeScale, borderVisible: false, lockVisibleTimeRangeOnResize: true, minBarSpacing: 0.01 },
+      crosshair: { ...base.crosshair, vertLine: { ...base.crosshair?.vertLine, style: LineStyle.Dashed, width: 1 } },
+      handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
+      handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: { time: true, price: false }, axisDoubleClickReset: false },
+    });
     const line = {
-      lineType: LineType.WithSteps,
+      lineType: LineType.Simple,
       priceLineVisible: false,
       lastValueVisible: false,
-      crosshairMarkerVisible: false,
-      priceFormat: PRICE_FORMAT,
+      crosshairMarkerRadius: 3,
+      priceFormat: { type: "custom", formatter: (price: number) => formatPriceAxis(price), minMove: 0.01 } as const,
     };
-    this.baseline = this.chart.addSeries(LineSeries, { ...line, color: color("ash"), lineWidth: 1, lineStyle: LineStyle.Dashed });
-    this.p50 = this.chart.addSeries(LineSeries, { ...line, color: gold, lineWidth: 2 });
-    this.actual = this.chart.addSeries(LineSeries, { ...line, color: color("ink"), lineWidth: 1 });
-    this.fan = new StepBand({ fill: withAlpha(color("chart-band"), 0.38), edge: withAlpha(gold, 0.3) });
+    // Same order as the Now chart: spot under the imbalance prices.
+    this.spot = this.chart.addSeries(LineSeries, { ...line, color: color("chart-spot"), lineWidth: 2 });
+    this.actual = this.chart.addSeries(AreaSeries, {
+      ...line,
+      lineColor: ink,
+      lineWidth: 1,
+      topColor: withAlpha(ink, 0.1),
+      bottomColor: withAlpha(ink, 0),
+    });
+    this.p50 = this.chart.addSeries(LineSeries, { ...line, color: color("series-1"), lineWidth: 2 });
+    this.fan = new StepBand({ fill: withAlpha(color("chart-band"), 0.32), shape: "line" });
     this.p50.attachPrimitive(this.fan);
+    this.chart.subscribeCrosshairMove((event) => {
+      this.onCross(typeof event.time === "number" ? (this.byTime.get(event.time) ?? null) : null);
+    });
   }
 
-  update(points: readonly HindsightPoint[]): void {
-    const series = (value: (point: HindsightPoint) => number | null) =>
-      points.map((point) => {
-        const number = value(point);
-        return number === null ? { time: at(point) } : { time: at(point), value: number };
+  update(rows: readonly HindsightRow[]): void {
+    this.byTime = new Map(rows.map((row) => [row.time, row]));
+    const series = (value: (row: HindsightRow) => number | null) =>
+      rows.map((row) => {
+        const number = value(row);
+        return number === null ? { time: row.time } : { time: row.time, value: number };
       });
-    this.baseline.setData(series((point) => point.baseline_p50));
-    this.p50.setData(series((point) => point.p50));
-    this.actual.setData(series((point) => point.actual));
-    this.fan.setPoints(points.map((point) => ({ time: at(point), upper: point.p90, lower: point.p10 })));
+    this.spot.setData(series((row) => row.spot));
+    this.actual.setData(series((row) => row.actual));
+    this.p50.setData(series((row) => row.p50));
+    this.fan.setPoints(rows.map((row) => ({ time: row.time, upper: row.p90, lower: row.p10 })));
     this.chart.timeScale().fitContent();
   }
 

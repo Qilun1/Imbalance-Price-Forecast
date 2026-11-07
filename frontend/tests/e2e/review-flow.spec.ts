@@ -68,7 +68,7 @@ test("reviewing a situation, from a calm hour to hindsight", async ({ page }) =>
   await expect(page.getByRole("heading", { name: "Hindsight" })).toBeVisible();
   await page.getByRole("radio", { name: "Previous day" }).click();
   await expect(page).toHaveURL(/range=day/);
-  const firstRaised = page.locator("tbody button").first();
+  const firstRaised = page.getByRole("region", { name: "Situations raised in this period" }).getByRole("button").first();
   await firstRaised.click();
   await expect(page).not.toHaveURL(/as_of=2026-10-28T20/);
 
@@ -106,12 +106,12 @@ test("no chart panel names TradingView, and the licence notice stays reachable",
 });
 
 for (const width of [1280, 1440, 1920]) {
-  test(`the situation log shows whole titles at ${width} px`, async ({ page }) => {
+  test(`the situation log shows whole titles in the side box at ${width} px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/hindsight?as_of=2026-10-28T20:00:00Z&range=week");
     const log = page.getByRole("region", { name: "Situations raised in this period" });
-    await expect(log.getByRole("cell", { name: "Forecast changed since the previous update" }).first()).toBeVisible();
-    const fits = await log.locator("[data-slot=table-container]").evaluate((box) => box.scrollWidth <= box.clientWidth);
+    await expect(log.getByText("Forecast changed since the previous update", { exact: true }).first()).toBeVisible();
+    const fits = await log.locator("[data-slot=situation-log]").evaluate((box) => box.scrollWidth <= box.clientWidth);
     expect(fits, "no column is pushed out of sight").toBe(true);
   });
 }
@@ -144,10 +144,9 @@ test("replay moves the viewing time forward and pauses", async ({ page }) => {
 
 test("past situations show whether they came true", async ({ page }) => {
   await page.goto("/hindsight?as_of=2026-10-28T20:00:00Z&range=week");
-  await expect(page.getByText(/that can be judged/)).toBeVisible();
-  await expect(page.getByRole("cell", { name: "Happened" }).first()).toBeVisible();
+  await expect(page.getByText("Happened", { exact: true }).first()).toBeVisible();
   await page.goto("/hindsight?as_of=2026-10-23T09:00:00Z");
-  await expect(page.getByRole("cell", { name: "Not known yet" }).first()).toBeVisible();
+  await expect(page.getByText("Not known yet", { exact: true }).first()).toBeVisible();
 });
 
 test("shortcuts stay quiet while typing", async ({ page }) => {
@@ -198,7 +197,7 @@ for (const path of SCREENS) {
   test(`${path} has at most one blue action and no accessibility problems`, async ({ page }) => {
     await page.goto(`${path}?as_of=${SPIKE}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await expect(page.locator("tbody tr, [aria-pressed]").first()).toBeVisible();
+    await expect(page.locator("tbody tr, [aria-pressed], [data-slot=situation-log] li").first()).toBeVisible();
     await page.waitForTimeout(800);
     expect(await page.locator('[data-variant="primary"]').count()).toBeLessThanOrEqual(1);
     const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
