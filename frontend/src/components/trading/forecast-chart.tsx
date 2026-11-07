@@ -1,42 +1,39 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import type { ActualPoint, Forecast } from "@/lib/api/client";
+import { readDirection } from "@/lib/chart/direction-pane";
 import { buildRows, type ChartRow, type ChartWindow, ForecastView, rowTime } from "@/lib/chart/forecast-view";
 import {
   formatDateTime,
-  formatPercent,
   formatPrice,
   formatPriceRange,
   formatShortDateTime,
   formatWindow,
   NO_VALUE,
   PRICE_UNIT,
+  toUnixSeconds,
 } from "@/lib/format";
-import { directionLabel, directionOf } from "@/lib/forecast";
+import { directionOf } from "@/lib/forecast";
 
-import { Readout, ReadoutRow, type ReadoutSpec } from "./chart-readout";
+import { DirectionText, Readout, ReadoutRow, type ReadoutSpec, writeDirectionText } from "./chart-readout";
 
 type Field = ReadoutSpec & { read: (row: ChartRow) => string };
 
+const happenedPrice = (row: ChartRow) => row.actual ?? row.outcome;
+
 const PRICE_FIELDS: readonly Field[] = [
-  { key: "actual", label: "Actual", swatch: "bg-ink", width: "min-w-12", read: (row) => formatPrice(row.actual ?? row.outcome) },
-  { key: "spot", label: "Spot", swatch: "bg-chart-spot", width: "min-w-12", read: (row) => formatPrice(row.spot) },
-  { key: "p50", label: "Forecast", swatch: "bg-series-1", width: "min-w-12", read: (row) => formatPrice(row.p50) },
+  { key: "actual", label: "Actual", swatch: "bg-ink", width: "min-w-[3em]", read: (row) => formatPrice(happenedPrice(row)) },
+  { key: "spot", label: "Spot", swatch: "bg-chart-spot", width: "min-w-[2.7em]", read: (row) => formatPrice(row.spot) },
+  { key: "p50", label: "Forecast (Imbalance)", swatch: "bg-series-1", width: "min-w-[2.7em]", read: (row) => formatPrice(row.p50) },
   {
     key: "range",
     label: "Prediction interval",
     swatch: "bg-chart-band",
-    width: "min-w-28",
+    width: "min-w-[8em]",
     read: (row) => (row.p10 === null || row.p90 === null ? NO_VALUE : formatPriceRange(row.p10, row.p90)),
   },
-];
-
-const DIRECTION_FIELDS: readonly Field[] = [
-  { key: "up", label: "Up", swatch: "bg-up", width: "min-w-9", read: (row) => formatPercent(row.pUp) },
-  { key: "down", label: "Down", swatch: "bg-down", width: "min-w-9", read: (row) => formatPercent(row.pDown) },
-  { key: "happened", label: "Happened", width: "min-w-10", read: (row) => (row.realised ? directionLabel(row.realised) : NO_VALUE) },
 ];
 
 /** Written straight to the DOM: the crosshair moves too often to re-render React for it. */
@@ -45,7 +42,7 @@ function writeReadout(root: HTMLElement | null, row: ChartRow | null): void {
   const time = rowTime(row);
   const at = root.querySelector("[data-field=time]");
   if (at) at.textContent = formatShortDateTime(time);
-  for (const field of [...PRICE_FIELDS, ...DIRECTION_FIELDS]) {
+  for (const field of PRICE_FIELDS) {
     const target = root.querySelector(`[data-field=${field.key}]`);
     if (target) target.textContent = field.read(row);
   }
@@ -63,6 +60,7 @@ function describe(forecast: Forecast): string {
     `P50 runs from ${formatPrice(Math.min(...prices))} to ${formatPrice(Math.max(...prices))} ${PRICE_UNIT}. ` +
     `Balancing is most likely up in ${count("up")} and down in ${count("down")} of ${steps.length} quarter-hours. ` +
     "The Nord Pool spot price is the purple line. " +
+    "In the lower pane solid bars show the direction that happened and pale fills the forecast's chances. " +
     "Use the left and right arrow keys to read each quarter-hour. The Next 10 h table holds the same values."
   );
 }
@@ -72,12 +70,15 @@ export default function ForecastChart({
   history,
   outcome,
   windows,
+  focus,
   spanHours,
 }: {
   forecast: Forecast;
   history: readonly ActualPoint[];
   outcome: readonly ActualPoint[];
   windows: readonly ChartWindow[];
+  /** A key figure's quarter-hours: shaded, with the readout on the first of them. */
+  focus: { start: string; end: string } | null;
   /** Hours of history in view when the chart opens; null for all of it. */
   spanHours: number | null;
 }) {
@@ -85,41 +86,43 @@ export default function ForecastChart({
   const readout = useRef<HTMLDivElement>(null);
   const view = useRef<ForecastView | null>(null);
   const resting = useRef<ChartRow | null>(null);
+  const lastDecided = useRef<ChartRow | null>(null);
 
   const rows = useMemo(() => buildRows(forecast, history, outcome), [forecast, history, outcome]);
-  const showsOutcome = outcome.length > 0;
+
+  /** Without a row under the crosshair, the picked key figure's quarter-hour or the first forecast one. */
+  const show = useCallback((row: ChartRow | null) => {
+    const shown = row ?? resting.current;
+    writeReadout(readout.current, shown);
+    const known = shown?.realised ? shown : lastDecided.current;
+    const direction = readDirection(shown, known, known && happenedPrice(known));
+    view.current?.showDirection(direction);
+    writeDirectionText(readout.current, direction);
+  }, []);
 
   useEffect(() => {
     if (!host.current) return;
-    const chart = new ForecastView(host.current, (row) => writeReadout(readout.current, row ?? resting.current));
+    const chart = new ForecastView(host.current, show);
     view.current = chart;
     return () => {
       chart.dispose();
       view.current = null;
     };
-  }, []);
+  }, [show]);
 
   useEffect(() => {
-    resting.current = rows.find((row) => row.p50 !== null) ?? null;
-    view.current?.update({ rows, origin: forecast.origin_utc, windows, spanHours });
-    writeReadout(readout.current, resting.current);
-  }, [rows, forecast.origin_utc, windows, spanHours]);
+    const focused = focus ? rows.find((row) => row.time === toUnixSeconds(focus.start)) : undefined;
+    resting.current = focused ?? rows.find((row) => row.p50 !== null) ?? null;
+    lastDecided.current = rows.findLast((row) => row.realised !== null) ?? null;
+    view.current?.update({ rows, origin: forecast.origin_utc, windows, focus, spanHours });
+    show(null);
+  }, [rows, forecast.origin_utc, windows, focus, spanHours, show]);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
       <Readout ref={readout}>
         <ReadoutRow fields={PRICE_FIELDS} showsTime />
-        <ReadoutRow fields={DIRECTION_FIELDS}>
-          {/* Here rather than in the panel header, so turning the switch on never moves the header row. */}
-          {showsOutcome ? (
-            <span
-              className="ml-auto min-w-0 truncate text-xs text-stone"
-              title="The black line after “Forecast” is what really happened. It was not known when the forecast was made."
-            >
-              Black line: what happened
-            </span>
-          ) : null}
-        </ReadoutRow>
+        <DirectionText />
       </Readout>
       <div
         ref={host}

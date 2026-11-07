@@ -5,6 +5,8 @@
  * - Actual: the realised imbalance price, a dark line with a soft fade under it.
  * - Spot: Nord Pool spot, a violet line.
  * - Forecast: the P50 made `lead` hours ahead, gold, with the P10-P90 prediction interval as a light band.
+ *
+ * Under them the balancing direction, see `DirectionPane`: the same forecast's chances and what happened.
  */
 import {
   AreaSeries,
@@ -14,16 +16,15 @@ import {
   LineSeries,
   LineStyle,
   LineType,
-  type UTCTimestamp,
 } from "lightweight-charts";
 
 import { formatPriceAxis } from "@/lib/format";
 
+import { DirectionPane, type DirectionReadout, type DirectionRow } from "./direction-pane";
 import { StepBand } from "./primitives";
 import { baseOptions, color, withAlpha } from "./theme";
 
-export type HindsightRow = {
-  time: UTCTimestamp;
+export type HindsightRow = DirectionRow & {
   actual: number | null;
   spot: number | null;
   p10: number;
@@ -37,6 +38,7 @@ export class HindsightView {
   private readonly spot: ISeriesApi<"Line">;
   private readonly p50: ISeriesApi<"Line">;
   private readonly fan: StepBand;
+  private readonly direction: DirectionPane;
   private byTime = new Map<number, HindsightRow>();
 
   constructor(host: HTMLElement, private readonly onCross: (row: HindsightRow | null) => void) {
@@ -70,6 +72,7 @@ export class HindsightView {
     this.p50 = this.chart.addSeries(LineSeries, { ...line, color: color("series-1"), lineWidth: 2 });
     this.fan = new StepBand({ fill: withAlpha(color("chart-band"), 0.32), shape: "line" });
     this.p50.attachPrimitive(this.fan);
+    this.direction = new DirectionPane(this.chart);
     this.chart.subscribeCrosshairMove((event) => {
       this.onCross(typeof event.time === "number" ? (this.byTime.get(event.time) ?? null) : null);
     });
@@ -86,7 +89,12 @@ export class HindsightView {
     this.actual.setData(series((row) => row.actual));
     this.p50.setData(series((row) => row.p50));
     this.fan.setPoints(rows.map((row) => ({ time: row.time, upper: row.p90, lower: row.p10 })));
+    this.direction.update(rows);
     this.chart.timeScale().fitContent();
+  }
+
+  showDirection(readout: DirectionReadout): void {
+    this.direction.show(readout);
   }
 
   dispose(): void {

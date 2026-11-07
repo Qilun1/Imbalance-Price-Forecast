@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { ActualPoint, Performance, Scores } from "@/lib/api/client";
 import { queries } from "@/lib/api/queries";
 import { safeStorage, useIsWide } from "@/lib/browser";
-import { addHours, formatBetter, formatCount, formatScore, PRICE_UNIT } from "@/lib/format";
+import { addHours, formatBetter, formatCount, formatScore, NO_VALUE, PRICE_UNIT } from "@/lib/format";
 import { useViewingTime } from "@/lib/realtime/viewing-time";
 
 import { Choice } from "./choice";
@@ -28,13 +28,14 @@ const HindsightChart = dynamic(() => import("./hindsight-chart"), {
 });
 
 const RANGES = {
-  day: { label: "Previous day", hours: 24 },
-  week: { label: "Previous week", hours: 24 * 7 },
-  month: { label: "Previous month", hours: 24 * 30 },
+  day: { label: "Previous day", title: "Previous Day", hours: 24 },
+  week: { label: "Previous week", title: "Previous Week", hours: 24 * 7 },
+  month: { label: "Previous month", title: "Previous Month", hours: 24 * 30 },
 } as const;
 type Range = keyof typeof RANGES;
 
-const LEADS = ["1", "4", "10"] as const;
+/** The chart compares the forecast made this many hours before each quarter-hour. */
+const LEAD_HOURS = 1;
 
 const NO_ACTUALS: readonly ActualPoint[] = [];
 
@@ -62,15 +63,21 @@ const METRICS: readonly { key: keyof Scores; label: string; short: string; digit
 
 const COVERAGE_LABEL = "P10–P90 coverage";
 const STRIP_LABELS = METRICS.map((metric) => metric.short);
-const STRIP_HEADING = "Diagnostic scores vs baseline";
+
+/** Lower scores are better. The strip's title names the period, so each figure names what it is against. */
+function againstBaseline(value: number | null, reference: number | null | undefined): string {
+  if (reference === undefined || reference === null) return "No baseline";
+  const comparison = formatBetter(value, reference);
+  return comparison === NO_VALUE ? comparison : `${comparison} than baseline`;
+}
 
 /** The diagnostic scores as one strip, the same look as the key figures on the Now screen. Rule 5: the title keeps them labelled as diagnostics. */
-function ScoreStrip({ performance }: { performance: Performance }) {
+function ScoreStrip({ performance, heading }: { performance: Performance; heading: string }) {
   const model = performance.diagnostic.model?.overall;
   const baseline = performance.diagnostic.baseline?.overall;
   if (!model) return null;
   return (
-    <StatStrip label={STRIP_HEADING} heading={STRIP_HEADING}>
+    <StatStrip label={heading} heading={heading}>
       {METRICS.map(({ key, label, short, digits, unit }) => {
         const value = model[key] as number | null;
         const reference = baseline?.[key] as number | null | undefined;
@@ -80,7 +87,7 @@ function ScoreStrip({ performance }: { performance: Performance }) {
             label={short}
             hint={label}
             value={unit && value !== null ? <Euro value={value} digits={digits} /> : formatScore(value, digits)}
-            detail={reference === undefined || reference === null ? "No baseline" : formatBetter(value, reference)}
+            detail={againstBaseline(value, reference)}
           />
         );
       })}
@@ -126,13 +133,13 @@ export function HindsightScreen() {
   const wide = useIsWide();
   const across = useDefaultLayout({ id: "hindsight-across", panelIds: ["evidence", "situations"], storage: safeStorage });
   const [range, setRange] = useUrlChoice<Range>("range", ["day", "week", "month"], "week");
-  const [lead, setLead] = useUrlChoice("lead", LEADS, "1");
   const from = current ? addHours(current, -RANGES[range].hours) : "";
   const to = current ?? "";
   const ready = current !== undefined;
+  const stripHeading = `Diagnostic for ${RANGES[range].title}`;
 
   const performance = useQuery({ ...queries.performance(asOf, from, to), enabled: ready });
-  const hindsight = useQuery({ ...queries.hindsight(asOf, from, to, Number(lead)), enabled: ready });
+  const hindsight = useQuery({ ...queries.hindsight(asOf, from, to, LEAD_HOURS), enabled: ready });
   const observed = useQuery({ ...queries.actualsBetween(asOf, from, to), enabled: ready });
   const history = useQuery(queries.alertHistory(asOf));
   const situations = useMemo(
@@ -146,22 +153,15 @@ export function HindsightScreen() {
       className="h-auto min-h-fit shrink-0"
       isEmpty={(data) => !data.diagnostic.model}
       empty={null}
-      skeleton={<StatStripSkeleton labels={STRIP_LABELS} heading={STRIP_HEADING} />}
+      skeleton={<StatStripSkeleton labels={STRIP_LABELS} heading={stripHeading} />}
     >
-      {(data) => <ScoreStrip performance={data} />}
+      {(data) => <ScoreStrip performance={data} heading={stripHeading} />}
     </QueryState>
   );
 
   const chart = (
     <Panel label="Forecast against what happened" className="h-full">
-      <PanelHeader title="Forecast vs actual" note={`${PRICE_UNIT}, shaded band is the prediction interval (80%)`} oneRow>
-        <Choice
-          label="How far ahead the forecast was made"
-          value={lead}
-          options={LEADS.map((value) => ({ value, label: `${value} h ahead` }))}
-          onChange={setLead}
-        />
-      </PanelHeader>
+      <PanelHeader title="Forecast vs actual" note={`${PRICE_UNIT}, shaded band (prediction interval 80%)`} oneRow />
       <PanelBody className="pb-2">
         <QueryState
           query={hindsight}
@@ -242,7 +242,7 @@ export function HindsightScreen() {
       ) : (
         <div className="flex shrink-0 flex-col gap-3">
           {scores}
-          <div className="h-[28rem]">{chart}</div>
+          <div className="h-[40rem]">{chart}</div>
           <div className="h-[36rem]">{situationsBox}</div>
         </div>
       )}
