@@ -121,11 +121,10 @@ The prompt ranks above `DESIGN.md`, which ranks above skills.
   KPI row.
 - **KPI row is one strip**, team decision, 7 Nov, styled after a Nordnet quote line: a muted label, a plain
   semibold number and one line of context, with no card per figure. Prices read in euros, as "€63.9 /MWh".
-  High and low price risk gave way to the highest and lowest P50 in the next 10 hours, with their times. The
-  largest revision takes the up colour when positive and the down colour when negative. Hindsight keeps its
-  cards. On wide screens the strip sits above the chart in the left column, matching its edges, so the
-  situations run full height on the right. Its columns follow its own width (container query), five from
-  672 px. The chart keeps its time range on resize (`lockVisibleTimeRangeOnResize`), as the narrower column
+  High and low price risk gave way to the highest and lowest P50 in the next 10 hours, with their times.
+  Hindsight keeps its cards. On wide screens the strip sits above the chart in the left column, matching its
+  edges, so the situations run full height on the right. Its columns follow its own width (container query),
+  all in one row from 576 px. The chart keeps its time range on resize (`lockVisibleTimeRangeOnResize`), as the narrower column
   otherwise cut off the forecast's end.
 - **Imbalance price and forecast chart scrolls through history**, team decision, 7 Nov, after Nordnet's
   period row. It loads every row usable at the viewing time since the data starts (31 May), the same request
@@ -134,8 +133,8 @@ The prompt ranks above `DESIGN.md`, which ranks above skills.
   quarter-hours: a 15 min / 1 hour / 2 hours density menu was tried and removed the same day. Axis ticks
   take the date from the chart's own day-change marks, not exact midnight.
 - **The chart header stays one row** (`PanelHeader oneRow`): the note never changes and shortens with an
-  ellipsis when space runs out, so "Show what happened" keeps its place. With it on, the readout row says
-  the black line after "Forecast" was not known then.
+  ellipsis when space runs out, so "Show what happened" keeps its place. Its label's hover text says that
+  what it shows was not known at the forecast time.
 - **Spot is a line in the imbalance price and forecast chart**, team decision, 7 Nov: Nord Pool spot as a
   2 px `--color-chart-spot` `#7c3aed` line (5.7:1 on white; the muted `--color-series-5` read too light),
   under the imbalance lines, past and the day-ahead prices published for the
@@ -148,7 +147,7 @@ The prompt ranks above `DESIGN.md`, which ranks above skills.
   The four price columns are equal and centred, so the Spot and Imbalance group names, each underlined,
   sit midway over their High and Low. The situations scroll below it. To fit it, the default split moved
   from 72/28 to 66/34 (storage id `now-across-v3`), the chart note dropped "times in UTC", and the key
-  figures hide their "/MWh" suffix when the strip is under 672 px so five still fit in one row. A spot
+  figures hide their "/MWh" suffix when the strip is under 672 px so they still fit in one row. A spot
   change % column was tried and removed the same day.
 - **Hindsight follows the Now layout**, team decision, 7 Nov. Left (66 %): the diagnostic scores as the
   same quiet strip as the key figures (`StatStrip`, short labels with the full metric name on hover, "53%
@@ -175,11 +174,62 @@ The prompt ranks above `DESIGN.md`, which ranks above skills.
   line it shows the forecast's chances; before it a pale full-height block is what happened. Changes from
   the pane first removed: up and down are drawn separately, not as their difference, so the axis reads the
   same numbers as the Next 10 h table, and the axis shows whole percent.
+- **What happened is a solid bar from the middle line**, team decision, 7 Nov. Pale full-height blocks
+  behind the chances could not be told from the forecast, and bars in lanes of their own outside the 100 %
+  lines read as detached, so the bars are back at the middle line, in the up and down colours at full
+  strength. "Show what happened" carries the bars past the Forecast line. The chances are see-through
+  (35 %), team decision, 7 Nov, so a bar shows through them in full; an opaque tint in front hid the bars.
+  Over a bar of its own colour a see-through fill cannot be seen, so there the chance's 2 px edge turns
+  white (per-point line colours) and still marks it: solid is what happened, pale or a white step is the
+  forecast. They are `Blocks`, not a series: Lightweight Charts joins a line across empty
+  rows, which would draw a bar over the quarter-hours not yet published at the forecast time.
+- **The Forecast line marks where the prediction starts**, team decision, 7 Nov: 2 px `--color-ink`, was a
+  faint grey hairline, with a dark tag "Forecast from 21:00 →" at the top of the price pane. In the lower pane
+  the line starts below the heading strip, so it never crosses the figures there.
+- **Hindsight has the same direction pane**, team decision, 7 Nov: `DirectionPane`, shared with the Now
+  chart, so bars, chances, heading row and crosshair behave the same. `HindsightPoint` gained `p_up` and
+  `p_down`, from the same forecast rows as its P50, so they carry the same `as_of` limit. The direction that
+  happened comes from the usable actuals, as the spot line does.
+- **Forecast vs actual shows the forecast made 1 hour ahead**, team decision, 7 Nov: the 1 h, 4 h and 10 h
+  ahead buttons were removed. The API keeps `lead_hours`, and the chart's description still names the lead.
+- **The score strip's title names the period**, team decision, 7 Nov: "Diagnostic for Previous Day", "Previous
+  Week" or "Previous Month", which still labels the figures as diagnostics (rule 5). The title no longer
+  says "vs baseline", so each figure does: "34% better than baseline".
+- **The chart note reads "shaded band (prediction interval 80%)"**, team decision, 7 Nov, on Now and Hindsight.
+- **The direction pane's heading row works like the readout**, team decision, 7 Nov: "Balancing direction",
+  then Up and Down with pale swatches like the chances, then Happened with a solid swatch like the bars and
+  "02:30 Down, decided at −€6.1". Up and Down follow the crosshair, as the band does; Happened names its own
+  time, as away from known quarter-hours it stays on the latest one. The price is the imbalance price, since
+  the direction decides how that price is calculated, not the mFRR marginal price, which the API does not
+  serve. It is written, not drawn, as the pane's axis is percent and a price line would have no scale there.
+  The strip is 24 % of the pane (was 14 %) so it no longer sits tight between the graphs, and the row takes
+  more lines only when the pane is too narrow for one. A canvas cannot be read aloud, so the band holds the
+  same words out of sight (`data-field=direction`).
 - **The chart readout is a filled band**, team decision, 7 Nov, as the names and numbers above the chart
-  were hard to see: `Readout` (`bg-fill`, the highlighted panel title's look), 14 px ink text, semibold
-  values, larger swatches. Now holds two rows (prices, then direction with what happened),
-  Hindsight the prices. Values reserve the width of the widest realistic number and the time is the short
-  "23 Oct 09:00", so the crosshair never rewraps the band and resizes the chart; it is two rows at 1440 px.
+  were hard to see: `Readout` (`bg-fill`, the highlighted panel title's look), ink text, semibold values,
+  larger swatches. It holds one row, the prices: time, actual, spot, forecast and prediction interval, on
+  Now and Hindsight alike. The text follows the band's inner width (container query): 11 px with 4 px gaps
+  from 38rem, which is the default split at 1280 px, 12 px from 43rem, 13 px from 47rem, 14 px from 50rem.
+  Each step starts where the row with realistic values was measured to fit, and value widths are in em so
+  they shrink with it. 11 px is the one size below the type scale, the cost of one row at 1280 px; a rare
+  four-digit negative price there reaches into the band's padding. Below 38rem, a phone or a panel dragged
+  narrow, it wraps rather than cutting off values. The time is the short "23 Oct 09:00".
+- **The readout row spans the band evenly**, team decision, 7 Nov: on one line its items share out the room
+  left over (`justify-between`), and the time keeps half an em after it, as it fills its whole width while the
+  values keep room beside theirs. The prediction interval keeps 8em, was 8.4em, to pay for that at 1280 px, and Actual 3em, was 3.6em, as it reads "–" through the forecast hours and the wider room left a gap after it.
+- **The Now key figures show their time in the chart**, team decision, 7 Nov. Each figure is a toggle button
+  (`aria-pressed`) laid over the figure: pressed, the chart shades its quarter-hours in grey and puts the
+  crosshair and readout on the first. Next hour price and Direction next hour shade the whole next hour,
+  Highest and Lowest price their one quarter-hour. A figure takes over the shading from the selected
+  situation, picking a situation lets go of the figure, and pressing the figure again lets go. The pick is
+  the figure, not its times, so stepping the viewing time follows the new forecast's highest or lowest.
+  Pressing a figure also sets the History row back to 1 day, team decision, 7 Nov, where its quarter-hours
+  are easy to see; letting go keeps whatever span is chosen.
+- **The forecast series is named "Forecast (Imbalance)"** in the readouts of Now and Hindsight, team
+  decision, 7 Nov, so it reads as the imbalance price forecast beside Spot. The tag on the Forecast line keeps
+  "Forecast from 21:00 →", as it marks where the whole forecast starts, the direction pane's included.
+- **Largest revision left the key figures**, team decision, 7 Nov. Forecast changes stay on the Next 10 h
+  screen and in the situations.
 - **"Prediction interval (80%)" replaces "likely range"**, team decision, 7 Nov, everywhere the P10–P90 band
   is named: the chart notes and readouts of Now and Hindsight and the Next hour figure, which puts the
   name and the numbers on two lines, as one line cut off the numbers. "Confidence interval" was used
@@ -216,7 +266,7 @@ The prompt ranks above `DESIGN.md`, which ranks above skills.
   diagnostics beside the official ones (rule 5). The API still returns the note.
 - **P10–P90 coverage left the score strip**, team decision, 7 Nov. It stays as a row in the official table.
   `StatStrip` now shares its row equally among any number of figures, so four fill Hindsight's strip and the
-  Now screen keeps five.
+  Now screen keeps four.
 - **Score names**, team decision, 7 Nov. "Exceptional prices" and "Direction" became "Spike error" and
   "Direction error", in the strip and the official table, because the old names read as topics, not scores.
   The full names keep "(Brier)". Brier scores have no unit, so these two show plain numbers.
