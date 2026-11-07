@@ -12,14 +12,12 @@ import {
   tableFeatures,
   useTable,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ChevronsUpDown, Rows3, Rows4 } from "lucide-react";
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Changes, Forecast, ForecastStep } from "@/lib/api/client";
-import { safeStorage } from "@/lib/browser";
 import { formatClock, formatDate, formatPercent, formatPrice, formatSignedPrice, formatWeekday, NO_VALUE } from "@/lib/format";
 import { directionOf, spread } from "@/lib/forecast";
 import { cn } from "@/lib/utils";
@@ -27,54 +25,6 @@ import { cn } from "@/lib/utils";
 import { DirectionLabel, PriceCell } from "./cells";
 
 type Row = ForecastStep & { spread: number | null; change: number | null; firstOfDay: boolean };
-
-const DENSITY_KEY = "table-density";
-type Density = "compact" | "comfortable";
-
-const densityListeners = new Set<() => void>();
-
-function readDensity(): Density {
-  return safeStorage.getItem(DENSITY_KEY) === "comfortable" ? "comfortable" : "compact";
-}
-
-function subscribeToDensity(listener: () => void) {
-  densityListeners.add(listener);
-  return () => {
-    densityListeners.delete(listener);
-  };
-}
-
-/** A per-viewer setting. The server always renders compact, and the saved choice applies after hydration. */
-export function useDensity() {
-  const density = useSyncExternalStore<Density>(subscribeToDensity, readDensity, () => "compact");
-  const change = (next: Density) => {
-    safeStorage.setItem(DENSITY_KEY, next);
-    for (const listener of densityListeners) listener();
-  };
-  return [density, change] as const;
-}
-
-export function DensityToggle({ density, onChange }: { density: Density; onChange: (density: Density) => void }) {
-  return (
-    <ToggleGroup
-      type="single"
-      size="sm"
-      spacing={1}
-      value={density}
-      aria-label="Row height"
-      onValueChange={(value) => {
-        if (value) onChange(value as Density);
-      }}
-    >
-      <ToggleGroupItem value="compact" aria-label="Compact rows">
-        <Rows4 aria-hidden />
-      </ToggleGroupItem>
-      <ToggleGroupItem value="comfortable" aria-label="Comfortable rows">
-        <Rows3 aria-hidden />
-      </ToggleGroupItem>
-    </ToggleGroup>
-  );
-}
 
 const features = tableFeatures({
   rowSortingFeature,
@@ -148,7 +98,7 @@ function SortIcon({ sorted }: { sorted: false | "asc" | "desc" }) {
   return <ChevronsUpDown className="size-3 opacity-50" aria-hidden />;
 }
 
-export function ForecastTable({ forecast, changes, density }: { forecast: Forecast; changes: Changes | undefined; density: Density }) {
+export function ForecastTable({ forecast, changes }: { forecast: Forecast; changes: Changes | undefined }) {
   const rows = useMemo<Row[]>(() => {
     const byTime = new Map(changes?.points.map((point) => [point.delivery_start_utc, point.p50_change]));
     return forecast.steps.map((step, index) => {
@@ -180,7 +130,7 @@ export function ForecastTable({ forecast, changes, density }: { forecast: Foreca
       style={{
         width: table.getTotalSize(),
         minWidth: "100%",
-        ["--table-row-height" as string]: `var(--spacing-row-${density})`,
+        ["--table-row-height" as string]: "var(--spacing-row-comfortable)",
       }}
     >
       <TableHeader className="sticky top-0 z-10 bg-card">

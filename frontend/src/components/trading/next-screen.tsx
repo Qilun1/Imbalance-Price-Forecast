@@ -11,7 +11,7 @@ import { queries } from "@/lib/api/queries";
 import { useViewingTime } from "@/lib/realtime/viewing-time";
 
 import { ExposureCheck } from "./exposure-check";
-import { DensityToggle, ForecastTable, useDensity } from "./forecast-table";
+import { ForecastTable } from "./forecast-table";
 import { PageHeader } from "./page-header";
 import { Panel, PanelBody, PanelHeader, PanelMessage } from "./panel";
 import { QueryState } from "./query-state";
@@ -23,7 +23,6 @@ export function NextScreen() {
   const forecast = useQuery(queries.forecast(asOf));
   const changes = useQuery(queries.changes(asOf));
   const alerts = useQuery(queries.alerts(asOf));
-  const [density, setDensity] = useDensity();
   const [checking, setChecking] = useState(false);
 
   return (
@@ -34,9 +33,7 @@ export function NextScreen() {
         </Button>
       </PageHeader>
       <Panel label="Forecast by quarter-hour" className="min-h-96 flex-1">
-        <PanelHeader title="Quarter-hours" note="Prices in €/MWh, times in UTC. Change is since the previous update.">
-          <DensityToggle density={density} onChange={setDensity} />
-        </PanelHeader>
+        <PanelHeader title="Quarter-hours" note="Prices in €/MWh, times in UTC. Change is since the previous update." />
         <PanelBody className="px-1 pb-1">
           <QueryState
             query={forecast}
@@ -49,12 +46,12 @@ export function NextScreen() {
             skeleton={
               <div className="flex flex-col gap-2 px-3" aria-hidden>
                 {Array.from({ length: 12 }, (_, index) => (
-                  <Skeleton key={index} className="h-6 w-full" />
+                  <Skeleton key={index} className="h-8 w-full" />
                 ))}
               </div>
             }
           >
-            {(data) => <ForecastTable forecast={data} changes={changes.data} density={density} />}
+            {(data) => <ForecastTable forecast={data} changes={changes.data} />}
           </QueryState>
         </PanelBody>
       </Panel>
