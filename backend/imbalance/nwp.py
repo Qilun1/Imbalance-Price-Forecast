@@ -114,7 +114,9 @@ NWP_SPECS = {"v2": ("ecmwf_ifs", "wind"),
              "v5": ("ecmwf_ifs", "wind"),       # v4 + long-history direction head
              "v5m": ("metno_nordic", "pop"),    # v4m + long-history direction head
              "v6": ("ecmwf_ifs", "wind"),       # v4 + second NWP model and forecast disagreement
-             "v6m": ("metno_nordic", "pop")}    # v4m + second NWP model and forecast disagreement
+             "v6m": ("metno_nordic", "pop"),
+             "v7": ("ecmwf_ifs", "wind"),       # v4 + system stress (nuclear, hydro, import-link saturation)
+             "v7m": ("metno_nordic", "pop")}    # v4m + system stress    # v4m + second NWP model and forecast disagreement
 
 # feature set -> the OTHER NWP model, used only for its wind (disagreement = weather uncertainty proxy)
 NWP_SECOND = {"v6": "metno_nordic", "v6m": "ecmwf_ifs"}

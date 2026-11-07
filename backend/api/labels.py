@@ -93,6 +93,18 @@ LABELS: dict[str, str] = {
     "nwp2_run_change_abs": "Second weather model change since its previous run",
     "nwp_run_change_abs": "Size of the wind change since the previous weather run",
     "nwp_models_absdiff_hmean": "Weather-model disagreement over the next 10 hours",
+    "nuc_last": "Nuclear production",
+    "nuc_change_1h": "Nuclear production change in the last hour",
+    "nuc_deficit_48h": "Nuclear production below its 48 h maximum",
+    "hydro_last": "Hydro production",
+    "hydro_change_1h": "Hydro production change in the last hour",
+    "se1_import_headroom": "Room to import more from northern Sweden (SE1)",
+    "se3_import_headroom": "Room to import more from central Sweden (SE3)",
+    "ee_import_headroom": "Room to import more from Estonia",
+    "se1_pinned_2h": "SE1 link flow constant for 2 h",
+    "se3_pinned_2h": "SE3 link flow constant for 2 h",
+    "ee_pinned_2h": "Estonia link flow constant for 2 h",
+    "import_headroom_total": "Total room to import more",
     "hist_p_up": "Up-regulation chance from 1.5 years of history",
 }
 
