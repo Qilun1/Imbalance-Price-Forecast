@@ -13,7 +13,7 @@ from imbalance import store
 from imbalance.features import Store, build, feature_columns
 
 from tools.training.feature_table import load_feature_table
-from imbalance.features import GRID_SETS, HIST_SETS, SYSTEM_SETS, WIND_OBS_SETS, _umm_for, load_hist
+from imbalance.features import GRID_SETS, HIST_SETS, PERSIST_SETS, SYSTEM_SETS, WIND_OBS_SETS, _umm_for, load_hist
 
 
 def rebuild(feature_set: str, long: pd.DataFrame, o: pd.Timestamp) -> pd.DataFrame:
@@ -27,7 +27,7 @@ def rebuild(feature_set: str, long: pd.DataFrame, o: pd.Timestamp) -> pd.DataFra
     return build(Store(visible), pd.DatetimeIndex([o]), with_targets=False, nwp=nwp_tables,
                  wind_obs=feature_set in WIND_OBS_SETS,
                  hist=load_hist() if feature_set in HIST_SETS else None, nwp2=nwp2,
-                    system=feature_set in SYSTEM_SETS, grid=feature_set in GRID_SETS,
+                    system=feature_set in SYSTEM_SETS, grid=feature_set in GRID_SETS, persist=feature_set in PERSIST_SETS,
                     umm=_umm_for(feature_set, visible_before=o))   # versions not yet usable physically removed   # its own check: hist_heads --check
 
 
