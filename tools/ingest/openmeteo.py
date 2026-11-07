@@ -108,8 +108,11 @@ def fetch_run(client: Client, model: str, run: pd.Timestamp, sites: pd.DataFrame
 GROUP_VARIABLES = {"wind": ["wind_speed_100m", "temperature_2m"], "pop": ["temperature_2m"]}
 
 
-def run(start: str, end: str, models: list[str] | None = None, keep_cache: bool = True, group: str = "wind") -> None:
-    """group 'wind': ~10 capacity-weighted wind sites; group 'pop': 7 population centres (temperature)."""
+def run(start: str, end: str, models: list[str] | None = None, keep_cache: bool = True, group: str = "wind",
+        run_hours: list[int] | None = None) -> None:
+    """group 'wind': ~10 capacity-weighted wind sites; group 'pop': 7 population centres (temperature).
+    run_hours overrides the model's default run hours (e.g. 3,9,15,21 to add fresher MET Nordic runs);
+    every run keeps its own availability (init + the model's publication delay)."""
     global KEEP_CACHE, VARIABLES
     KEEP_CACHE = keep_cache
     VARIABLES = GROUP_VARIABLES[group]
@@ -124,6 +127,7 @@ def run(start: str, end: str, models: list[str] | None = None, keep_cache: bool 
     client = Client(min_interval_s=0.6, budget=Budget(**FREE_BUDGET))
     for model in models:
         delay, hours = MODELS[model]
+        hours = tuple(run_hours) if run_hours else hours
         if delay is None:
             raise RuntimeError(f"{model}: publication delay not measured; run `uv run python -m tools.cli "
                                f"nwp-delay --model {model}` and set it in MODELS (AGENTS.md rule 4)")
