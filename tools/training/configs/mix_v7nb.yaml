@@ -1,0 +1,18 @@
+# mix_v7b: structural mixture P(direction) x P(spread | direction) on feature set v7 (v4 + system stress) (backend/imbalance/mixture.py)
+name: mix_v7nb
+feature_set: v7
+blocks: [[1, 8], [9, 40]]        # lead-time blocks with their own conditional heads (steps, inclusive)
+spikes: mixture        # spike probabilities from the mixture (alternatives: classifier, mean)
+widen: 1.4             # held-out check: chosen per validation week on the other four weeks -> 1.3-1.5 (tools: widen check in EVALUATION)
+regressor:
+  n_estimators: 150
+  learning_rate: 0.03
+  num_leaves: 31
+  min_child_samples: 200
+classifier:
+  n_estimators: 110
+  learning_rate: 0.03
+  num_leaves: 31
+  min_child_samples: 200
+# nuclear event signals only (1 h change, deficit vs 48 h max)
+drop_features: ["nuc_last", "hydro_last", "hydro_change_1h", "se1_pinned_2h", "se3_pinned_2h", "ee_pinned_2h", "import_headroom_total", "se1_import_headroom", "se3_import_headroom", "ee_import_headroom"]

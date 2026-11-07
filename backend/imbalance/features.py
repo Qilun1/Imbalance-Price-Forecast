@@ -16,8 +16,9 @@ from . import store as db
 from .contract import HORIZON_STEPS as HORIZON, SPIKE_MARGIN, STEP  # noqa: F401
 
 FEATURE_SET = "v1"                 # default feature set
-FEATURE_SETS = ("v1", "v2", "v2p", "v3", "v4", "v4m", "v5", "v5m", "v6", "v6m")   # v2+ = v1 + vintaged NWP proxies; model per set in nwp.NWP_SPECS
-WIND_OBS_SETS = {"v4", "v4m", "v5", "v5m", "v6", "v6m"}     # + observed wind error vs Fingrid day-ahead forecast (Fingrid 75 vs 246)
+FEATURE_SETS = ("v1", "v2", "v2p", "v3", "v4", "v4m", "v5", "v5m", "v6", "v6m", "v7", "v7m")   # v2+ = v1 + vintaged NWP proxies; model per set in nwp.NWP_SPECS
+WIND_OBS_SETS = {"v4", "v4m", "v5", "v5m", "v6", "v6m", "v7", "v7m"}
+SYSTEM_SETS = {"v7", "v7m"}       # + system stress: nuclear / hydro (Fingrid 188 / 191) and import-link saturation     # + observed wind error vs Fingrid day-ahead forecast (Fingrid 75 vs 246)
 HIST_SETS = {"v5", "v5m"}         # + out-of-sample long-history direction head (tools/training/hist_heads.py)
 WIND_ERR_TAUS_H = (1, 3, 6)       # decay time constants (h) of the observed error with lead time
 
@@ -86,7 +87,8 @@ def lag_window(store: Store, sid: str, last: np.ndarray, o: np.ndarray, k: int) 
 
 
 def build(store: Store, origins: pd.DatetimeIndex, with_targets: bool, nwp: tuple | None = None,
-          wind_obs: bool = False, hist: pd.DataFrame | None = None, nwp2=None) -> pd.DataFrame:
+          wind_obs: bool = False, hist: pd.DataFrame | None = None, nwp2=None,
+          system: bool = False) -> pd.DataFrame:
     """Feature rows for (origin, step). nwp = (wind RunTable, temp RunTable) adds the v2 weather columns;
     wind_obs adds the observed wind-error columns (v4)."""
     import warnings
@@ -101,6 +103,8 @@ def build(store: Store, origins: pd.DatetimeIndex, with_targets: bool, nwp: tupl
             df = add_wind_obs(df, store)
         if hist is not None:
             df = add_hist(df, hist)
+        if system:
+            df = add_system_state(df, store)
         return df
 
 
@@ -158,6 +162,53 @@ def add_wind_obs(df: pd.DataFrame, store: Store) -> pd.DataFrame:
     wind_cut = store.grid[np.clip(li, 0, None)].asi8
     cut = np.maximum(df["data_cutoff_utc"].dt.as_unit("ns").astype("int64").to_numpy(),
                      pd.Series(wind_cut, index=origins).reindex(o_key).to_numpy())
+    out["data_cutoff_utc"] = pd.to_datetime(np.minimum(cut, o_key.asi8), utc=True)
+    return out
+
+
+FLOW_LINKS = ("fi_se1_flow", "fi_se3_flow", "fi_ee_flow")   # positive = export from Finland
+
+
+def add_system_state(df: pd.DataFrame, store: Store) -> pd.DataFrame:
+    """v7: system stress at the origin, from measured series only (Store.get applies the availability
+    rule; Fingrid 188 / 191 are usable 60 min after their quarter-hour ends).
+
+    Scarcity spikes in validation coincide with (a) a nuclear unit tripping or ramping down
+    (9 Sep: -850 MW) and (b) an import link pinned at its limit (SE3 flow constant), so Finland
+    cannot import more balancing power. Features:
+    - nuclear and hydro level, 1 h change, nuclear deficit vs its 48 h maximum;
+    - per link: import headroom = flow minus its most-importing value of the last 7 days (0 = at
+      the weekly import maximum), and a pinned flag (flow constant over the last 2 h).
+    """
+    out = df.copy()
+    origins = pd.DatetimeIndex(df["forecast_origin_utc"].unique()).as_unit("ns")
+    o_ns = origins.asi8
+    feats, cuts = {}, []
+    for sid, short in (("fi_nuclear_production_rt", "nuc"), ("fi_hydro_production_rt", "hydro")):
+        li = store.latest_index(sid, o_ns)
+        w = lag_window(store, sid, li, o_ns, 192 if short == "nuc" else 4)
+        feats[f"{short}_last"] = w[:, 0]
+        feats[f"{short}_change_1h"] = w[:, 0] - w[:, 4 if w.shape[1] > 4 else -1]
+        if short == "nuc":
+            feats["nuc_deficit_48h"] = np.nanmax(w, axis=1) - w[:, 0]
+        cuts.append(store.grid[np.clip(li, 0, None)].asi8)
+    headroom = 0.0
+    for sid in FLOW_LINKS:
+        li = store.latest_index(sid, o_ns)
+        w = lag_window(store, sid, li, o_ns, 672)                     # 7 days of quarter-hours
+        h = w[:, 0] - np.nanmin(w, axis=1)
+        feats[f"{sid[3:-5]}_import_headroom"] = h
+        feats[f"{sid[3:-5]}_pinned_2h"] = (np.nanstd(w[:, :8], axis=1) < 1.0).astype(float)
+        headroom = headroom + np.nan_to_num(h)
+    feats["import_headroom_total"] = headroom
+    per_origin = pd.DataFrame(feats, index=origins)
+    o_key = pd.DatetimeIndex(df["forecast_origin_utc"]).as_unit("ns")
+    rows = per_origin.reindex(o_key)
+    for c in per_origin.columns:
+        out[c] = rows[c].to_numpy()
+    cut = df["data_cutoff_utc"].dt.as_unit("ns").astype("int64").to_numpy()
+    for c in cuts:
+        cut = np.maximum(cut, pd.Series(c, index=origins).reindex(o_key).to_numpy())
     out["data_cutoff_utc"] = pd.to_datetime(np.minimum(cut, o_key.asi8), utc=True)
     return out
 
@@ -370,4 +421,5 @@ def build_table(origins: pd.DatetimeIndex | None = None, with_targets: bool = Tr
             raise RuntimeError(f"feature set {feature_set} needs {nwp.NWP_SECOND[feature_set]} wind runs")
     return build(st, pd.DatetimeIndex(origins), with_targets=with_targets, nwp=nwp_tables,
                  wind_obs=feature_set in WIND_OBS_SETS,
-                 hist=load_hist() if feature_set in HIST_SETS else None, nwp2=nwp2)
+                 hist=load_hist() if feature_set in HIST_SETS else None, nwp2=nwp2,
+                 system=feature_set in SYSTEM_SETS)
