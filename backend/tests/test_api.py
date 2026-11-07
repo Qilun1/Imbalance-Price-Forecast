@@ -172,9 +172,12 @@ def test_no_response_has_a_spot_field(client, path):
 
 
 def test_every_model_feature_has_a_label():
-    for model in ("lgbm_v1", "lgbm_v1-val"):
-        features = json.loads((ARTIFACTS_DIR / model / "meta.json").read_text())["features"]
-        assert not [f for f in features if f not in LABELS]
+    metas = sorted(ARTIFACTS_DIR.glob("*/meta.json"))   # models are not tracked: only those trained locally
+    if not metas:
+        pytest.skip("no trained models")
+    for meta in metas:
+        features = json.loads(meta.read_text(encoding="utf-8"))["features"]
+        assert not [f for f in features if f not in LABELS], meta.parent.name
 
 
 def test_unknown_driver_ids_still_read_well():

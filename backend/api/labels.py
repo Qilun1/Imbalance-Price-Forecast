@@ -67,6 +67,13 @@ LABELS: dict[str, str] = {
     "holiday": "Public holiday",
     "quarter": "Quarter of the hour",
     "last_imbalance_price": "Latest imbalance price",
+    "nwp_wind_mw": "Wind power from the weather forecast",
+    "nwp_wind_minus_fingrid_fc": "Weather-based wind vs Fingrid wind forecast",
+    "nwp_wind_run_change": "Wind change since the previous weather run",
+    "nwp_wind_ramp_1h": "Weather-based wind change over the hour",
+    "nwp_run_age_h": "Age of the latest weather forecast",
+    "nwp_temp_c": "Temperature forecast, population-weighted",
+    "nwp_temp_change_vs_origin": "Temperature change from now",
 }
 
 
