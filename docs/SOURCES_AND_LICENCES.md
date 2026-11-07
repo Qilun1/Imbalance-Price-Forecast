@@ -34,6 +34,7 @@ shift. They are never used for the test period.
 |---|---|---|---|
 | Fingrid Open Data API | Nuclear (188) and hydro (191) real-time production, 3 min averaged to 15 min, 60 min lag | CC BY 4.0 | Ingested only; no feature set in this repo uses them |
 | Fingrid Open Data API, history since 20 Mar 2025 (`tools/ingest/fingrid_history.py`) | 319, 244, 106, 375, 376, 369, 347-350, 342, 75 | CC BY 4.0 | Imbalance price rebuild check (`tools/eval/rebuild_price.py`) and the long-history direction head (sets v5 / v5m, not submitted). Pre-June imbalance price is never a training target |
+| Nord Pool REMIT UMM API (`tools/ingest/umm.py`) | Urgent market messages for Finland: production, consumption and transmission unavailability, every message version with its publication time | Public REMIT inside information; Nord Pool API terms apply (free API). **Reuse terms to be confirmed** | Feature sets v8 / v8m (not submitted: no gain) and dashboard alerts with a link to the message. Each version usable from the first full hour after publication + 5 min |
 | Fingrid package series extended past 2 Nov 2026 (319, 244, 106, 375, 376, 369, 124, 74) | Live dashboard only | CC BY 4.0 | Dashboard; never the backtest |
 
 Fingrid forecast datasets (165, 166, 241, 242, 245-248) are never fetched from the API: it keeps only
