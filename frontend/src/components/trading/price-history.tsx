@@ -31,12 +31,12 @@ function Price({ value }: { value: Extreme | null }) {
 const PRICE = "h-auto px-1 py-1.5 text-center";
 const GROUP = "h-auto px-1 pt-1 pb-0.5 text-center";
 
-/** Highest and lowest prices per period, set at the foot of the "What to check now" box. */
+/** Highest and lowest prices per period, set above the situations in the "What to check now" box. */
 export function PriceHistorySection() {
   const { origin, history } = useHistory();
   const rows = useMemo(() => (history.data && origin ? priceHistory(history.data.points, origin) : []), [history.data, origin]);
   return (
-    <section aria-labelledby="price-history-title" className="shrink-0 border-t border-hairline-soft px-2 pt-3 pb-2">
+    <section aria-labelledby="price-history-title" className="shrink-0 border-b border-hairline-soft px-2 pt-3 pb-2">
       <div className="flex items-baseline gap-2 px-2 pb-1">
         <h2 id="price-history-title" className="eyebrow text-stone">
           Price history
