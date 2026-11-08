@@ -77,6 +77,8 @@ def _span(rows: pd.DataFrame) -> str:
 
 
 def _drivers(rows: pd.DataFrame, n: int = 3) -> list[Driver]:
+    """The forecast's top_drivers are SHAP contributions of the direction classifier, so they explain
+    the regulation direction, not the price level or the spike probability; the wording says so."""
     counts = Counter(name for text in rows["top_drivers"].dropna() for name in text.split(";") if name)
     return [Driver(id=name, label=label_for(name)) for name, _ in counts.most_common(n)]
 
@@ -86,7 +88,7 @@ def _because(drivers: list[Driver]) -> str:
     if not names:
         return ""
     listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
-    return f" Main drivers: {listed}."
+    return f" Drivers of the regulation direction: {listed}."
 
 
 def _alert(kind: str, rows: pd.DataFrame, title: str, sentence: str, check: str, evidence: dict[str, float],
