@@ -60,7 +60,7 @@ the verification loop.
 
 ### App shell, on every route
 
-- **Sidebar:** 240 px, collapses to a 64 px rail, ink band. Now, Next 10 h, Hindsight.
+- **Sidebar:** 240 px, collapses to a 64 px rail, ink band. Now, Next 10 h, Hindsight, API.
 - **Top bar:** `ViewingTimeControl`, `ForecastStamp`, ⌘K trigger, all in UTC.
 - **Situation timeline:** a thin strip under the top bar with one mark per hour of the whole period,
   showing when situations occurred. Click to jump there.
@@ -76,6 +76,7 @@ latest" appears in the top bar.
 | `/` **Now** | What to check now and what is coming | KPI row, Situations, Forecast chart, Drivers, Changes since previous update |
 | `/next-10h` **Next 10 h** | Every quarter-hour in detail | Forecast table, Exposure check in a sheet |
 | `/hindsight` **Hindsight** | How the forecast performed | Range toggle, Official validation scores, Diagnostic scores, Error by hours ahead, Forecast vs actual, Situation log |
+| `/api-guide` **API** | Level 2's "API from which this information can be retrieved": pull the same data into other tools | Pull the data |
 | `/dev/ui` | Hidden. Every primitive in every state | Primitive gallery |
 
 ### Now
