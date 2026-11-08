@@ -15,6 +15,10 @@ IMBALANCE_CHALLENGER_VAL / IMBALANCE_CHALLENGER_TEST
 IMBALANCE_NOTES_VAL / IMBALANCE_NOTES_TEST
                       event classifiers behind /notes, default alerts-val / alerts. "none" turns
                       the notes off for that period.
+Real mode replays the test period as if it were then: it opens at the first test origin, and no observed
+value (imbalance price, direction, spot history) from the test period on is served, whatever the viewing
+time. Test forecasts are shown; what happened in the test period is not.
+
 IMBALANCE_CORS_ORIGINS
                       comma-separated browser origins allowed to call the API directly, e.g.
                       "http://localhost:5173". Empty (default): no CORS headers. The dashboard needs
@@ -62,6 +66,8 @@ class Settings:
     periods: tuple[Period, ...]
     forecast_db: Path
     store_db: Path
+    # Observed values stop here (the test period's first origin); None shows everything usable.
+    observed_until: pd.Timestamp | None = None
 
 
 def load_settings() -> Settings:
@@ -76,7 +82,7 @@ def load_settings() -> Settings:
             Period("test", os.environ.get("IMBALANCE_MODEL_TEST", "ens_finald"), "baseline-test", TEST_FIRST_ORIGIN,
                    _challenger("IMBALANCE_CHALLENGER_TEST", "lgbm_v2"), _challenger("IMBALANCE_NOTES_TEST", "alerts")),
         )
-        return Settings("real", periods, INFER_DB, STATIC_DB)
+        return Settings("real", periods, INFER_DB, STATIC_DB, observed_until=TEST_FIRST_ORIGIN)
     raise ValueError(f"IMBALANCE_DATA_MODE must be 'mock' or 'real', not {mode!r}")
 
 

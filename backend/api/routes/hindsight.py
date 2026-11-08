@@ -17,7 +17,7 @@ DEFAULT_WINDOW = pd.Timedelta(days=7)
 def get_hindsight(start: AwareDatetime | None = Query(None, alias="from", description="First quarter-hour; 7 days before as_of if omitted"),
                   end: AwareDatetime | None = Query(None, alias="to", description="End of the range, exclusive; as_of if omitted"),
                   lead_hours: int = Query(1, ge=1, le=10, description="How many hours ahead the forecast was made"),
-                  as_of: AwareDatetime | None = Query(None, description="Viewing time; the newest forecast if omitted"),
+                  as_of: AwareDatetime | None = Query(None, description="Viewing time; start_origin_utc of /api/meta if omitted"),
                   repo: Repository = Depends(get_repository)) -> Hindsight:
     moment = repo.resolve_as_of(as_of)
     first = to_utc(start) if start is not None else moment - DEFAULT_WINDOW

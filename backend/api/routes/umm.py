@@ -36,7 +36,7 @@ class UmmFeed(BaseModel):
 
 
 @router.get("/umm", response_model=UmmFeed)
-def get_umm(as_of: AwareDatetime | None = Query(None, description="Viewing time; the newest forecast if omitted"),
+def get_umm(as_of: AwareDatetime | None = Query(None, description="Viewing time; start_origin_utc of /api/meta if omitted"),
             hours: float = Query(10.0, ge=1, le=48, description="Look-ahead window"),
             min_mw: float = Query(50.0, ge=0, description="Smallest unavailable capacity to show"),
             repo: Repository = Depends(get_repository)) -> UmmFeed:

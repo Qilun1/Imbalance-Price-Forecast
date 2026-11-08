@@ -65,7 +65,7 @@ the verification loop.
 - **Situation timeline:** a thin strip under the top bar with one mark per hour of the whole period,
   showing when situations occurred. Click to jump there.
 
-**Viewing time** lives in the URL as `?as_of=<UTC>`. No value means the newest forecast. It carries across
+**Viewing time** lives in the URL as `?as_of=<UTC>`. No value means the API's start: with real data the first test forecast (5 Oct 00:00 Helsinki), with mock data the newest one. It carries across
 routes and can be shared as a link. Moving it into the past shows only what was known then, and "Back to
 latest" appears in the top bar.
 

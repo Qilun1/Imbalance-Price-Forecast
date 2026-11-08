@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import type { ActualPoint } from "@/lib/api/client";
+import type { PriceLevel } from "@/lib/chart/forecast-view";
 import { queries } from "@/lib/api/queries";
 import { formatClock, formatEuro, formatPercent, PRICE_UNIT } from "@/lib/format";
 import { type Figure, figureWindow, headline, windowOf } from "@/lib/forecast";
@@ -86,8 +87,8 @@ const SPANS = [
 ] as const;
 type Span = (typeof SPANS)[number]["value"];
 
-export function ForecastPanel() {
-  const { asOf, isPast } = useViewingTime();
+export function ForecastPanel({ levels }: { levels?: readonly PriceLevel[] }) {
+  const { asOf, isPast, observedUntil } = useViewingTime();
   const forecast = useQuery(queries.forecast(asOf));
   const { alerts, selected, figure } = useNow();
   const origin = forecast.data?.origin_utc;
@@ -108,7 +109,9 @@ export function ForecastPanel() {
     if (figure) setSpan("1d");
   }
   const spanHours = SPANS.find((option) => option.value === span)?.hours ?? null;
-  const showOutcome = wantsOutcome && isPast && origin !== undefined;
+  // What happened is shown only before the test period: the API serves nothing observed in it.
+  const canShowOutcome = isPast && origin !== undefined && (observedUntil === undefined || origin < observedUntil);
+  const showOutcome = wantsOutcome && canShowOutcome;
   const outcome = useQuery({ ...queries.outcome(origin ?? ""), enabled: showOutcome });
 
   const top = useMemo(() => (forecast.data ? headline(forecast.data) : null), [forecast.data]);
@@ -129,7 +132,7 @@ export function ForecastPanel() {
         note={`${PRICE_UNIT}, shaded band (prediction interval 80%)`}
         oneRow
       >
-        {isPast ? (
+        {canShowOutcome ? (
           <div className="flex shrink-0 items-center gap-2">
             <Switch id="show-outcome" size="sm" checked={wantsOutcome} onCheckedChange={setWantsOutcome} />
             <Label
@@ -161,6 +164,7 @@ export function ForecastPanel() {
               windows={windows}
               focus={focus}
               spanHours={spanHours}
+              levels={levels}
             />
           )}
         </QueryState>

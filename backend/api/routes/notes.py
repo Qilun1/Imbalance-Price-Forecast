@@ -13,7 +13,7 @@ router = APIRouter(tags=["notes"])
 
 @router.get("/notes", response_model=Notes)
 def get_notes(persona: Persona | None = Query(None, description="trader or operator (CHP with electric boilers); every event if omitted"),
-              as_of: AwareDatetime | None = Query(None, description="Viewing time; the newest forecast if omitted"),
+              as_of: AwareDatetime | None = Query(None, description="Viewing time; start_origin_utc of /api/meta if omitted"),
               thresholds: str | None = Query(None, description="Per-event thresholds overriding the defaults, "
                                              "e.g. spike_high:0.3,extreme_price:0.2"),
               include_low_skill: bool = Query(False, description="Also return events with little validation skill"),

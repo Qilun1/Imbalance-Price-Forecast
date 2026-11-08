@@ -52,9 +52,18 @@ machine-readable schema is at <http://127.0.0.1:8000/openapi.json>). Real mode n
 | `GET /api/notes?persona=trader\|operator&as_of=&thresholds=&include_low_skill=` | Learned event probabilities for the next 0–2, 2–5 and 5–10 h, with interval, lift vs normal, confidence, drivers and what to check |
 | `GET /api/hindsight?from=&to=&lead_hours=&as_of=` | Each quarter-hour as forecast `lead_hours` ahead, against what happened |
 | `GET /api/umm?as_of=&hours=&min_mw=` | Nord Pool outage messages (UMM) for Finland in the next hours, with links |
+| `GET /api/fuel/snapshot` | Reference fuel and CO2 prices and Naantali NA4 / electric boiler marginal costs (`backend/fuel/README.md`); not tied to `as_of` |
 
 Timestamps are UTC and must carry a time zone, for example `2026-10-20T08:00:00Z`. `as_of` is the
-viewing time; if it is left out, the API uses the newest forecast.
+viewing time; if it is left out, the API uses `start_origin_utc` from `/api/meta`.
+
+**The test period is replayed as if it were then.** With real data the API opens at the first test
+forecast (`2026-10-04T21:00:00Z`, 5 Oct 00:00 Helsinki). From there on it serves forecasts only: no
+observed value (realised price, direction, spot history) from the test period, at any `as_of`.
+Observed values stop at `observed_until_utc` in `/api/meta`, as they were known at that moment, so
+`/api/actuals`, `/api/hindsight`, the diagnostic scores and situation outcomes all end there. Spot for
+a forecast's own hours still comes with `/api/forecast`, from its first usable origin, because the
+forecast was made with it. Mock data has no cut and opens at its newest forecast.
 
 ## The endpoints one by one
 
@@ -63,7 +72,8 @@ time it answers for. Nothing in a response was unknown at that time (see "Rules 
 Prices are EUR/MWh and probabilities are 0–1.
 
 **`/api/meta`**: start here. Says whether the API serves `mock` or `real` data, which model answers
-for each period (validation, test), the first and last forecast time you can ask for, the horizon
+for each period (validation, test), the first and last forecast time you can ask for, the default one (`start_origin_utc`), where
+observed values stop (`observed_until_utc`, null for mock data), the horizon
 (40 steps of 15 min) and the spike margin (50 EUR/MWh). Use it to find valid `as_of` values.
 
 **`/api/forecast`**: the main product. The forecast made at the newest hour at or before `as_of`:

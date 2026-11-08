@@ -1,11 +1,9 @@
-"""FastAPI router, not registered yet. To enable, add it to the router loop in
-backend/api/main.py (prefix /api):
+"""FastAPI router, registered in backend/api/main.py (prefix /api).
 
-    from backend.fuel import api as fuel
-
-GET /api/fuel/snapshot?spot=45.2   -> panel JSON (spot optional; pass the current or
-                                  forecast spot so the e-boiler comparison fills in)
-GET /fuel/snapshot?refresh=true -> force a re-fetch from Statistics Finland
+GET /api/fuel/snapshot          -> panel JSON; the Naantali CHP screen calls it without spot
+GET /api/fuel/snapshot?spot=45.2 -> also fills in the e-boiler comparison. Not for the dashboard:
+                                   the query string lands in the access log (AGENTS.md rule 6)
+GET /api/fuel/snapshot?refresh=true -> force a re-fetch from Statistics Finland
 """
 from fastapi import APIRouter, Query
 

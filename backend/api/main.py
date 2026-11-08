@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from backend.api.repository import OutOfRange, get_repository
 from backend.api.routes import actuals, alerts, forecast, hindsight, meta, notes, performance, umm
 from backend.api.settings import cors_origins
+from backend.fuel import api as fuel
 
 
 @asynccontextmanager
@@ -29,7 +30,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Imbalance price forecast API", version="0.1.0", lifespan=lifespan)
 
-for module in (meta, forecast, actuals, alerts, notes, performance, hindsight, umm):
+for module in (meta, forecast, actuals, alerts, notes, performance, hindsight, umm, fuel):
     app.include_router(module.router, prefix="/api")
 
 # Browser apps on another origin need CORS; off unless IMBALANCE_CORS_ORIGINS names them. Read-only API.

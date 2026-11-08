@@ -10,8 +10,10 @@ uv run python -m backend.fuel --refresh      # force re-fetch
 uv run pytest backend/tests/test_fuel.py     # offline tests
 ```
 
-Not wired into the API or dashboard yet. When we decide to, add `fuel` to the router loop in
-`backend/api/main.py` (`from backend.fuel import api as fuel`), which gives `GET /api/fuel/snapshot?spot=45`.
+Served by the dashboard API as `GET /api/fuel/snapshot` (router registered in `backend/api/main.py`)
+and shown on the dashboard's Naantali CHP screen (`/operator`). The screen calls it without `spot`:
+a spot value in the query string would land in the API's access log (AGENTS.md rule 6). It compares
+the forecast's spot with `heat.e_boiler_cheaper_below_spot` instead.
 
 ## Data
 

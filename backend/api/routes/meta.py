@@ -25,6 +25,7 @@ def get_meta(repo: Repository = Depends(get_repository)) -> Meta:
                                   first_origin_utc=origins[0] if len(origins) else None,
                                   last_origin_utc=origins[-1] if len(origins) else None, origins=len(origins)))
     return Meta(mode=repo.settings.mode, note=NOTES[repo.settings.mode],
-                first_origin_utc=repo.origins[0], last_origin_utc=repo.origins[-1], origins=len(repo.origins),
+                first_origin_utc=repo.origins[0], last_origin_utc=repo.origins[-1], start_origin_utc=repo.start,
+                observed_until_utc=repo.observed_until, origins=len(repo.origins),
                 periods=periods, horizon_steps=HORIZON_STEPS, step_minutes=STEP_MINUTES,
                 spike_margin_eur_mwh=SPIKE_MARGIN, display_timezone=DISPLAY_TZ)

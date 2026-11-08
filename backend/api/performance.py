@@ -58,7 +58,20 @@ def _scores(metrics: dict) -> dict:
         "coverage_p10_p90": _number(metrics["coverage_p10_p90"]),
         "brier_spike_mean": _number(metrics["brier_spike_mean"]),
         "brier_direction": _number(metrics["brier_direction"]),
+        "observed_spike_high_share": _number(metrics.get("observed_spike_high_share", math.nan)),
+        "observed_spike_low_share": _number(metrics.get("observed_spike_low_share", math.nan)),
+        "forecast_spike_high_share": _number(metrics.get("forecast_spike_high_share", math.nan)),
+        "forecast_spike_low_share": _number(metrics.get("forecast_spike_low_share", math.nan)),
     }
+
+
+def _metrics(rows: pd.DataFrame) -> dict:
+    """The organiser's metrics, plus the model's mean spike probabilities over the rows they score for spikes."""
+    metrics = _organiser_metrics()(rows, SPIKE_MARGIN)
+    spike = rows[rows["imbalance_price"].notna() & rows["spot_price"].notna()]
+    metrics["forecast_spike_high_share"] = spike["p_spike_high"].mean()
+    metrics["forecast_spike_low_share"] = spike["p_spike_low"].mean()
+    return metrics
 
 
 def _window_scores(forecast: pd.DataFrame, actuals: pd.DataFrame, label: str) -> ScoreSet | None:
@@ -67,11 +80,10 @@ def _window_scores(forecast: pd.DataFrame, actuals: pd.DataFrame, label: str) ->
     if rows.empty or rows["imbalance_price"].notna().sum() == 0:
         return None
     rows = rows.rename(columns={"spot": "spot_price"})
-    metrics = _organiser_metrics()
-    by_hour = [HorizonScores(horizon_hour=int(hour), **_scores(metrics(group, SPIKE_MARGIN)))
+    by_hour = [HorizonScores(horizon_hour=int(hour), **_scores(_metrics(group)))
                for hour, group in rows.groupby((rows["step"] - 1) // STEPS_PER_HOUR + 1, sort=True)]
     model = ",".join(sorted(rows["model"].unique()))
-    return ScoreSet(label=label, model=model, overall=Scores(**_scores(metrics(rows, SPIKE_MARGIN))), by_horizon=by_hour)
+    return ScoreSet(label=label, model=model, overall=Scores(**_scores(_metrics(rows))), by_horizon=by_hour)
 
 
 def _read_official(model: str, label: str) -> ScoreSet | None:
@@ -87,8 +99,9 @@ def _read_official(model: str, label: str) -> ScoreSet | None:
 def build_hindsight(repo: Repository, as_of: pd.Timestamp, start: pd.Timestamp, end: pd.Timestamp,
                     lead_hours: int) -> Hindsight:
     """Quarter-hours in [start, end) as forecast `lead_hours` ahead. Each hourly forecast gives four of
-    them at every lead time, so each quarter-hour appears exactly once."""
+    them at every lead time, so each quarter-hour appears exactly once. Ends where observed values stop."""
     first_step = (lead_hours - 1) * STEPS_PER_HOUR + 1
+    end = repo.observed_end(end)
 
     def at_lead(frame: pd.DataFrame) -> pd.DataFrame:
         if frame.empty:

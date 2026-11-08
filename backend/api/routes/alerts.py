@@ -14,7 +14,7 @@ router = APIRouter(tags=["alerts"])
 
 
 @router.get("/alerts", response_model=Alerts)
-def get_alerts(as_of: AwareDatetime | None = Query(None, description="Viewing time; the newest forecast if omitted"),
+def get_alerts(as_of: AwareDatetime | None = Query(None, description="Viewing time; start_origin_utc of /api/meta if omitted"),
                repo: Repository = Depends(get_repository)) -> Alerts:
     moment = repo.resolve_as_of(as_of)
     origin = repo.origin_at(moment)
@@ -25,7 +25,7 @@ def get_alerts(as_of: AwareDatetime | None = Query(None, description="Viewing ti
 @router.get("/alerts/history", response_model=AlertHistory)
 def get_alert_history(start: AwareDatetime | None = Query(None, alias="from", description="First forecast time; the first forecast if omitted"),
                       end: AwareDatetime | None = Query(None, alias="to", description="End of the range, exclusive; nothing after as_of is ever included"),
-                      as_of: AwareDatetime | None = Query(None, description="Viewing time; the newest forecast if omitted"),
+                      as_of: AwareDatetime | None = Query(None, description="Viewing time; start_origin_utc of /api/meta if omitted"),
                       repo: Repository = Depends(get_repository)) -> AlertHistory:
     moment = repo.resolve_as_of(as_of)
     first = to_utc(start) if start is not None else repo.origins[0]

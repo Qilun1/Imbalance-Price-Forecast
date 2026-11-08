@@ -161,6 +161,12 @@ class Scores(BaseModel):
     coverage_p10_p90: float | None
     brier_spike_mean: float | None
     brier_direction: float | None
+    # Exceptional prices: share of quarter-hours above spot + margin (high) or below spot - margin (low).
+    observed_spike_high_share: float | None = None
+    observed_spike_low_share: float | None = None
+    # The model's mean p_spike_high / p_spike_low over the same quarter-hours; not in score.py's output files.
+    forecast_spike_high_share: float | None = None
+    forecast_spike_low_share: float | None = None
 
 
 class HorizonScores(Scores):
@@ -232,6 +238,8 @@ class Meta(BaseModel):
     note: str
     first_origin_utc: datetime
     last_origin_utc: datetime
+    start_origin_utc: datetime              # the default viewing time: the test period's first forecast
+    observed_until_utc: datetime | None     # no observed value from here on (the test period); None: no cut
     origins: int
     periods: list[PeriodInfo]
     horizon_steps: int

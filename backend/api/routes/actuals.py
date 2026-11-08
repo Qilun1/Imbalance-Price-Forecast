@@ -15,7 +15,7 @@ DEFAULT_LOOKBACK = pd.Timedelta(hours=24)
 @router.get("/actuals", response_model=Actuals)
 def get_actuals(start: AwareDatetime | None = Query(None, alias="from", description="First quarter-hour; 24 h before as_of if omitted"),
                 end: AwareDatetime | None = Query(None, alias="to", description="End of the range, exclusive; as_of if omitted"),
-                as_of: AwareDatetime | None = Query(None, description="Viewing time; the newest forecast if omitted"),
+                as_of: AwareDatetime | None = Query(None, description="Viewing time; start_origin_utc of /api/meta if omitted"),
                 repo: Repository = Depends(get_repository)) -> Actuals:
     moment = repo.resolve_as_of(as_of)
     first = to_utc(start) if start is not None else moment - DEFAULT_LOOKBACK

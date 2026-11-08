@@ -62,7 +62,7 @@ export const queries = {
       queryFn: () => api.actuals(asOf, from, to),
       ...byTime(asOf),
     }),
-  /** What really happened after the viewing time. Asked of the newest data on purpose: it is hindsight. */
+  /** What really happened after the viewing time. Asked without a viewing time on purpose: it is hindsight. Ends before the test period. */
   outcome: (origin: string) =>
     queryOptions({
       queryKey: ["actuals", "outcome", origin],
@@ -82,4 +82,12 @@ export const queries = {
       queryFn: () => api.hindsight(asOf, from, to, leadHours),
       ...byTime(asOf),
     }),
+  /** The plant operator's event notes (CHP with electric boilers). */
+  operatorNotes: (asOf?: string) =>
+    queryOptions({ queryKey: ["notes", "operator", asOf ?? "latest"], queryFn: () => api.notes(asOf, "operator"), ...byTime(asOf) }),
+  /** Every outage message, however small, in the forecast's 10 hours. */
+  umm: (asOf?: string) =>
+    queryOptions({ queryKey: ["umm", asOf ?? "latest"], queryFn: () => api.umm(asOf, HORIZON_HOURS, 0), ...byTime(asOf) }),
+  /** Monthly statistics: the API caches them for a day, so an hour here is plenty. Not tied to the viewing time. */
+  fuel: () => queryOptions({ queryKey: ["fuel"], queryFn: api.fuel, staleTime: 60 * 60_000, gcTime: THIRTY_MINUTES }),
 };

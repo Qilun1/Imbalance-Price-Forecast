@@ -38,7 +38,7 @@ persistence baseline: MAE -38 %, pinball -53 %, spike Brier -23 %, direction Bri
 |---|---|
 | `backend/imbalance/` | Core package: data store with availability-masked readers, feature building, mixture model, inference, forecast store |
 | `backend/api/` | FastAPI app for the dashboard (forecast, alerts, hindsight, performance, UMM feed) |
-| `backend/fuel/` | Fuel-cost reference panel backend (not wired into the dashboard) |
+| `backend/fuel/` | Reference fuel and CO2 prices and Naantali marginal costs, for the dashboard's Naantali CHP screen (display only, not a model input) |
 | `backend/tests/` | pytest suite (134 tests), including the no-data-in-git check |
 | `backend/artifacts/`, `backend/infer_data/` | Trained models and inferred forecasts (gitignored, rebuilt by the pipeline) |
 | `frontend/` | Next.js 16 / React 19 dashboard |

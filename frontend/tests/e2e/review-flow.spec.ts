@@ -2,7 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 
 const SPIKE = "2026-10-23T09:00:00Z"; // scripted in backend/api/mock.py
-const SCREENS = ["/", "/next-10h", "/hindsight"];
+const SCREENS = ["/", "/next-10h", "/hindsight", "/operator"];
 
 test.beforeAll(async ({ request }) => {
   const meta = await (await request.get("/api/meta")).json();

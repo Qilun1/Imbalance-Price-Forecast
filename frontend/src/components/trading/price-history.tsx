@@ -33,8 +33,6 @@ const GROUP = "h-auto px-1 pt-1 pb-0.5 text-center";
 
 /** Highest and lowest prices per period, set above the situations in the "What to check now" box. */
 export function PriceHistorySection() {
-  const { origin, history } = useHistory();
-  const rows = useMemo(() => (history.data && origin ? priceHistory(history.data.points, origin) : []), [history.data, origin]);
   return (
     <section aria-labelledby="price-history-title" className="shrink-0 border-b border-hairline-soft px-2 pt-3 pb-2">
       <div className="flex items-baseline gap-2 px-2 pb-1">
@@ -45,57 +43,66 @@ export function PriceHistorySection() {
           {PRICE_UNIT}
         </p>
       </div>
-      <QueryState query={history} skeleton={<SkeletonLines rows={5} className="px-2" />}>
-        {() => (
-          <Table className="table-fixed text-xs">
-            <colgroup>
-              <col className="w-[24%]" />
-              <col className="w-[19%]" />
-              <col className="w-[19%]" />
-              <col className="w-[19%]" />
-              <col className="w-[19%]" />
-            </colgroup>
-            <TableHeader>
-              <TableRow className="border-0 hover:bg-transparent">
-                <TableHead rowSpan={2} className="h-auto px-1.5 align-bottom">
-                  Period
-                </TableHead>
-                <TableHead colSpan={2} className={GROUP}>
-                  <span className="block border-b border-hairline pb-0.5">Spot</span>
-                </TableHead>
-                <TableHead colSpan={2} className={GROUP}>
-                  <span className="block border-b border-hairline pb-0.5">Imbalance</span>
-                </TableHead>
-              </TableRow>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className={PRICE}>High</TableHead>
-                <TableHead className={PRICE}>Low</TableHead>
-                <TableHead className={PRICE}>High</TableHead>
-                <TableHead className={PRICE}>Low</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((row) => (
-                <TableRow key={row.key}>
-                  <TableCell className="truncate px-1.5 py-1.5 text-ink">{row.label}</TableCell>
-                  <TableCell className={PRICE}>
-                    <Price value={row.spotHigh} />
-                  </TableCell>
-                  <TableCell className={PRICE}>
-                    <Price value={row.spotLow} />
-                  </TableCell>
-                  <TableCell className={PRICE}>
-                    <Price value={row.imbalanceHigh} />
-                  </TableCell>
-                  <TableCell className={PRICE}>
-                    <Price value={row.imbalanceLow} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </QueryState>
+      <PriceHistoryTable />
     </section>
+  );
+}
+
+/** The table alone, for a box that names it another way, such as a tab. */
+export function PriceHistoryTable() {
+  const { origin, history } = useHistory();
+  const rows = useMemo(() => (history.data && origin ? priceHistory(history.data.points, origin) : []), [history.data, origin]);
+  return (
+    <QueryState query={history} skeleton={<SkeletonLines rows={5} className="px-2" />}>
+      {() => (
+        <Table className="table-fixed text-xs">
+          <colgroup>
+            <col className="w-[24%]" />
+            <col className="w-[19%]" />
+            <col className="w-[19%]" />
+            <col className="w-[19%]" />
+            <col className="w-[19%]" />
+          </colgroup>
+          <TableHeader>
+            <TableRow className="border-0 hover:bg-transparent">
+              <TableHead rowSpan={2} className="h-auto px-1.5 align-bottom">
+                Period
+              </TableHead>
+              <TableHead colSpan={2} className={GROUP}>
+                <span className="block border-b border-hairline pb-0.5">Spot</span>
+              </TableHead>
+              <TableHead colSpan={2} className={GROUP}>
+                <span className="block border-b border-hairline pb-0.5">Imbalance</span>
+              </TableHead>
+            </TableRow>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className={PRICE}>High</TableHead>
+              <TableHead className={PRICE}>Low</TableHead>
+              <TableHead className={PRICE}>High</TableHead>
+              <TableHead className={PRICE}>Low</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row) => (
+              <TableRow key={row.key}>
+                <TableCell className="truncate px-1.5 py-1.5 text-ink">{row.label}</TableCell>
+                <TableCell className={PRICE}>
+                  <Price value={row.spotHigh} />
+                </TableCell>
+                <TableCell className={PRICE}>
+                  <Price value={row.spotLow} />
+                </TableCell>
+                <TableCell className={PRICE}>
+                  <Price value={row.imbalanceHigh} />
+                </TableCell>
+                <TableCell className={PRICE}>
+                  <Price value={row.imbalanceLow} />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </QueryState>
   );
 }

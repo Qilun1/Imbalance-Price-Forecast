@@ -2,7 +2,8 @@
 
 /**
  * The viewing time: the moment the whole dashboard shows. It lives in the URL as ?as_of=<UTC>, so it
- * carries across screens and can be shared. No value means "follow the newest forecast".
+ * carries across screens and can be shared. No value means the API's start: with real data the first
+ * test forecast (5 Oct 00:00 Helsinki), with mock data the newest one.
  * This is the one place that knows how it is stored.
  */
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -13,13 +14,16 @@ import { queries } from "@/lib/api/queries";
 import { addHours, floorToHour, hoursBetween } from "@/lib/format";
 
 type ViewingTimeState = {
-  /** Sent to the API. Undefined while following the newest forecast. */
+  /** Sent to the API. Undefined at the start. */
   asOf: string | undefined;
   /** The moment on screen, once the range is known. */
   current: string | undefined;
   first: string | undefined;
   last: string | undefined;
+  /** Before the newest forecast. */
   isPast: boolean;
+  /** The API shows no observed value from here on (the test period); undefined: no cut. */
+  observedUntil: string | undefined;
 };
 
 type ViewingTimeActions = {
@@ -55,16 +59,18 @@ export function ViewingTimeProvider({ children }: { children: ReactNode }) {
   const requested = searchParams.get("as_of") ?? undefined;
   const first = meta?.first_origin_utc;
   const last = meta?.last_origin_utc;
-  const current = requested ?? last;
+  const start = meta?.start_origin_utc;
+  const observedUntil = meta?.observed_until_utc ?? undefined;
+  const current = requested ?? start;
 
   const setTime = useCallback(
     (moment: string | undefined) => {
       if (moment === undefined || last === undefined || first === undefined) return writeUrl(moment);
       const hour = floorToHour(moment);
-      if (hoursBetween(hour, last) <= 0) return writeUrl(undefined);
-      writeUrl(hoursBetween(first, hour) < 0 ? first : hour);
+      const shown = hoursBetween(hour, last) <= 0 ? last : hoursBetween(first, hour) < 0 ? first : hour;
+      writeUrl(start !== undefined && hoursBetween(shown, start) === 0 ? undefined : shown);
     },
-    [first, last],
+    [first, last, start],
   );
 
   const canStep = useCallback(
@@ -77,13 +83,13 @@ export function ViewingTimeProvider({ children }: { children: ReactNode }) {
 
   const step = useCallback(
     (hours: number) => {
-      const from = readUrl() ?? last;
+      const from = readUrl() ?? start;
       if (from !== undefined) setTime(addHours(floorToHour(from), hours));
     },
-    [last, setTime],
+    [start, setTime],
   );
 
-  const toLatest = useCallback(() => writeUrl(undefined), []);
+  const toLatest = useCallback(() => setTime(last), [last, setTime]);
 
   // A past answer never changes, so fetching the next hours ahead makes stepping feel instant.
   const queryClient = useQueryClient();
@@ -114,7 +120,8 @@ export function ViewingTimeProvider({ children }: { children: ReactNode }) {
       current,
       first,
       last,
-      isPast: requested !== undefined,
+      isPast: current !== undefined && last !== undefined && hoursBetween(current, last) > 0,
+      observedUntil,
       replaying,
       toggleReplay,
       setTime,
@@ -122,7 +129,7 @@ export function ViewingTimeProvider({ children }: { children: ReactNode }) {
       canStep,
       toLatest,
     }),
-    [requested, current, first, last, replaying, toggleReplay, setTime, step, canStep, toLatest],
+    [requested, current, first, last, observedUntil, replaying, toggleReplay, setTime, step, canStep, toLatest],
   );
 
   return <Context value={value}>{children}</Context>;

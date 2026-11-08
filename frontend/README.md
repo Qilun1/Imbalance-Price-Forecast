@@ -59,6 +59,7 @@ Browser tests use the installed Microsoft Edge, so no browser download is needed
 | `/` | Price history and what to check now, key figures, and the imbalance price and forecast chart with the spot price and balancing direction |
 | `/next-10h` | Every quarter-hour in a table, and the Exposure check |
 | `/hindsight` | Scores against the baseline and forecast vs actual, with past situations and the official scores in a side box |
+| `/operator` | Naantali CHP: the Now screen for the plant operator. Same key figures, chart and situations, with the plant's cost levels (e-boiler break-even, NA4 power cost per fuel) drawn on the chart, and a Fuel tab (heat source now, NA4 status from UMM, fuel and power cost per fuel against the forecast) beside Price history. The situation in focus rings the part of the plant it concerns |
 | `/dev/ui` | Hidden. Every primitive in every state |
 
 The viewing time is in the URL as `?as_of=<UTC>`, so a moment in the past can be shared as a link. The

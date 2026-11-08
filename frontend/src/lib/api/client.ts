@@ -29,6 +29,26 @@ export type ScoreSet = Schemas["ScoreSet"];
 export type HorizonScores = Schemas["HorizonScores"];
 export type Hindsight = Schemas["Hindsight"];
 export type HindsightPoint = Schemas["HindsightPoint"];
+export type Notes = Schemas["Notes"];
+export type Note = Schemas["Note"];
+export type UmmFeed = Schemas["UmmFeed"];
+export type UmmMessage = Schemas["UmmMessage"];
+
+/**
+ * /api/fuel/snapshot returns a plain dict (backend/fuel/service.py build_snapshot), so it has no generated
+ * schema. Only the fields the Naantali CHP screen reads. Prices EUR/MWh, null where no price is known.
+ */
+export type FuelSnapshot = {
+  label: string;
+  eua: { eur_t: number; as_of: string | null; source: string };
+  fuels: Record<string, { eur_mwh: number | null; period: string | null; source: string; eur_mwh_incl_co2: number | null }>;
+  heat: { heat_only_boiler_eur_mwh: number | null; e_boiler_cheaper_below_spot: number | null };
+  chp: {
+    unit: string;
+    by_fuel: { fuel: string; fuel_eur_mwh_incl_co2: number | null; power_cost_after_heat_credit: number | null }[];
+  };
+  errors: Record<string, string>;
+};
 
 type Query = Record<string, string | number | undefined>;
 
@@ -65,6 +85,10 @@ export const api = {
   performance: (asOf?: string, from?: string, to?: string) => get<Performance>("/api/performance", { as_of: asOf, from, to }),
   hindsight: (asOf: string | undefined, from: string, to: string, leadHours: number) =>
     get<Hindsight>("/api/hindsight", { as_of: asOf, from, to, lead_hours: leadHours }),
+  notes: (asOf: string | undefined, persona: "trader" | "operator") => get<Notes>("/api/notes", { as_of: asOf, persona }),
+  umm: (asOf: string | undefined, hours: number, minMw: number) => get<UmmFeed>("/api/umm", { as_of: asOf, hours, min_mw: minMw }),
+  /** Never pass spot here: the query string lands in the API's access log (AGENTS.md rule 6). */
+  fuel: () => get<FuelSnapshot>("/api/fuel/snapshot"),
 };
 
 export { ApiError };

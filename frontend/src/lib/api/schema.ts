@@ -174,6 +174,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fuel/snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Snapshot */
+        get: operations["snapshot_api_fuel_snapshot_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -463,6 +480,14 @@ export interface components {
             brier_spike_mean: number | null;
             /** Brier Direction */
             brier_direction: number | null;
+            /** Observed Spike High Share */
+            observed_spike_high_share?: number | null;
+            /** Observed Spike Low Share */
+            observed_spike_low_share?: number | null;
+            /** Forecast Spike High Share */
+            forecast_spike_high_share?: number | null;
+            /** Forecast Spike Low Share */
+            forecast_spike_low_share?: number | null;
             /** Horizon Hour */
             horizon_hour: number;
         };
@@ -485,6 +510,13 @@ export interface components {
              * Format: date-time
              */
             last_origin_utc: string;
+            /**
+             * Start Origin Utc
+             * Format: date-time
+             */
+            start_origin_utc: string;
+            /** Observed Until Utc */
+            observed_until_utc: string | null;
             /** Origins */
             origins: number;
             /** Periods */
@@ -642,6 +674,14 @@ export interface components {
             brier_spike_mean: number | null;
             /** Brier Direction */
             brier_direction: number | null;
+            /** Observed Spike High Share */
+            observed_spike_high_share?: number | null;
+            /** Observed Spike Low Share */
+            observed_spike_low_share?: number | null;
+            /** Forecast Spike High Share */
+            forecast_spike_high_share?: number | null;
+            /** Forecast Spike Low Share */
+            forecast_spike_low_share?: number | null;
         };
         /**
          * Situation
@@ -778,7 +818,7 @@ export interface operations {
     get_forecast_api_forecast_get: {
         parameters: {
             query?: {
-                /** @description Viewing time; the newest forecast if omitted */
+                /** @description Viewing time; start_origin_utc of /api/meta if omitted */
                 as_of?: string | null;
             };
             header?: never;
@@ -810,7 +850,7 @@ export interface operations {
     get_changes_api_changes_get: {
         parameters: {
             query?: {
-                /** @description Viewing time; the newest forecast if omitted */
+                /** @description Viewing time; start_origin_utc of /api/meta if omitted */
                 as_of?: string | null;
             };
             header?: never;
@@ -846,7 +886,7 @@ export interface operations {
                 from?: string | null;
                 /** @description End of the range, exclusive; as_of if omitted */
                 to?: string | null;
-                /** @description Viewing time; the newest forecast if omitted */
+                /** @description Viewing time; start_origin_utc of /api/meta if omitted */
                 as_of?: string | null;
             };
             header?: never;
@@ -878,7 +918,7 @@ export interface operations {
     get_alerts_api_alerts_get: {
         parameters: {
             query?: {
-                /** @description Viewing time; the newest forecast if omitted */
+                /** @description Viewing time; start_origin_utc of /api/meta if omitted */
                 as_of?: string | null;
             };
             header?: never;
@@ -914,7 +954,7 @@ export interface operations {
                 from?: string | null;
                 /** @description End of the range, exclusive; nothing after as_of is ever included */
                 to?: string | null;
-                /** @description Viewing time; the newest forecast if omitted */
+                /** @description Viewing time; start_origin_utc of /api/meta if omitted */
                 as_of?: string | null;
             };
             header?: never;
@@ -948,7 +988,7 @@ export interface operations {
             query?: {
                 /** @description trader or operator (CHP with electric boilers); every event if omitted */
                 persona?: ("trader" | "operator") | null;
-                /** @description Viewing time; the newest forecast if omitted */
+                /** @description Viewing time; start_origin_utc of /api/meta if omitted */
                 as_of?: string | null;
                 /** @description Per-event thresholds overriding the defaults, e.g. spike_high:0.3,extreme_price:0.2 */
                 thresholds?: string | null;
@@ -988,7 +1028,7 @@ export interface operations {
                 from?: string | null;
                 /** @description End of the range, exclusive; as_of if omitted */
                 to?: string | null;
-                /** @description Viewing time; the newest forecast if omitted */
+                /** @description Viewing time; start_origin_utc of /api/meta if omitted */
                 as_of?: string | null;
             };
             header?: never;
@@ -1026,7 +1066,7 @@ export interface operations {
                 to?: string | null;
                 /** @description How many hours ahead the forecast was made */
                 lead_hours?: number;
-                /** @description Viewing time; the newest forecast if omitted */
+                /** @description Viewing time; start_origin_utc of /api/meta if omitted */
                 as_of?: string | null;
             };
             header?: never;
@@ -1058,7 +1098,7 @@ export interface operations {
     get_umm_api_umm_get: {
         parameters: {
             query?: {
-                /** @description Viewing time; the newest forecast if omitted */
+                /** @description Viewing time; start_origin_utc of /api/meta if omitted */
                 as_of?: string | null;
                 /** @description Look-ahead window */
                 hours?: number;
@@ -1078,6 +1118,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UmmFeed"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    snapshot_api_fuel_snapshot_get: {
+        parameters: {
+            query?: {
+                /** @description EUR/MWh */
+                spot?: number | null;
+                refresh?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */

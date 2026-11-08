@@ -3,6 +3,8 @@
 Two rules are enforced here, in one place, for every route:
 - Availability: observed rows pass through the organiser's own rows_available_at(), so at viewing time
   `as_of` the API shows only what was usable then, and forecasts are limited to origins <= as_of.
+- Test period: observed values stop at `settings.observed_until` (real mode: the first test origin), as
+  known then, whatever the viewing time. Test forecasts are shown, what happened after them is not.
 - Licence: only DISPLAY_SERIES is ever loaded. It includes the spot price because the dashboard may show
   it (AGENTS.md rule 6). Spot goes to the dashboard and nowhere else: never log or export it.
 
@@ -54,6 +56,10 @@ class Repository:
         self._primary_by_origin = dict(tuple(self.primary.groupby("forecast_origin_utc")))
         self._challenger_by_origin = dict(tuple(self.challenger.groupby("forecast_origin_utc")))
         self.origins = pd.DatetimeIndex(sorted(self._primary_by_origin))
+        self.observed_until = settings.observed_until
+        # The default viewing time: the first forecast of the test period, or the newest without one.
+        cut = self.observed_until
+        self.start = self.origins[-1] if cut is None else self.origins[min(self.origins.searchsorted(cut), len(self.origins) - 1)]
         self.observations = store.load_observations(list(DISPLAY_SERIES), settings.store_db)
         self.event_probs = self._load("notes")
         self._notes_by_origin = dict(tuple(self.event_probs.groupby("forecast_origin_utc")))
@@ -85,8 +91,8 @@ class Repository:
 
     # ---------- viewing time ----------
     def resolve_as_of(self, as_of) -> pd.Timestamp:
-        """The viewing time, defaulting to the newest forecast. Raises OutOfRange outside the data."""
-        ts = self.origins[-1] if as_of is None else to_utc(as_of)
+        """The viewing time, defaulting to `start`. Raises OutOfRange outside the data."""
+        ts = self.start if as_of is None else to_utc(as_of)
         if ts < self.origins[0] or ts >= self.origins[-1] + HOUR:
             raise OutOfRange(f"as_of must be from {self.origins[0]} to before {self.origins[-1] + HOUR}")
         return ts
@@ -133,9 +139,17 @@ class Repository:
             self.alerts_at(origin)
 
     # ---------- observed values ----------
+    def observed_end(self, end: pd.Timestamp) -> pd.Timestamp:
+        """`end`, cut where observed values stop (the test period's first origin in real mode)."""
+        return end if self.observed_until is None else min(end, self.observed_until)
+
     def actuals(self, as_of: pd.Timestamp, start: pd.Timestamp | None = None, end: pd.Timestamp | None = None) -> pd.DataFrame:
         """Price, direction and spot usable at `as_of`, optionally for quarter-hours in [start, end).
-        A quarter-hour can have spot and no realised price yet, so price and direction may be empty."""
+        A quarter-hour can have spot and no realised price yet, so price and direction may be empty.
+        Never past `observed_until`: neither a later quarter-hour nor a row published after it."""
+        if self.observed_until is not None:
+            as_of = min(as_of, self.observed_until)
+            end = self.observed_end(end) if end is not None else self.observed_until
         rows = self.observations
         if start is not None:
             rows = rows[rows["timestamp_utc"] >= start]

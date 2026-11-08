@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { ActualPoint, Performance, Scores } from "@/lib/api/client";
 import { queries } from "@/lib/api/queries";
 import { safeStorage, useIsWide } from "@/lib/browser";
-import { addHours, formatBetter, formatCount, formatScore, NO_VALUE, PRICE_UNIT } from "@/lib/format";
+import { addHours, formatBetter, formatCount, formatPercent, formatScore, hoursBetween, NO_VALUE, PRICE_UNIT } from "@/lib/format";
 import { useViewingTime } from "@/lib/realtime/viewing-time";
 
 import { Choice } from "./choice";
@@ -61,8 +61,27 @@ const METRICS: readonly { key: keyof Scores; label: string; short: string; digit
   { key: "brier_direction", label: "Direction error (Brier)", short: "Direction error", digits: 3 },
 ];
 
+/** Exceptional prices: imbalance price more than this far from spot (AGENTS.md rule 2; never changed). */
+const SPIKE_MARGIN = 50;
+
+/** How often each exceptional price happened in the period, against how often the model said it would. */
+const SPIKES = [
+  {
+    side: "High",
+    observed: "observed_spike_high_share",
+    forecast: "forecast_spike_high_share",
+    hint: `Exceptional high prices: share of quarter-hours with the imbalance price above spot + ${SPIKE_MARGIN} €/MWh, against the model's mean p_spike_high`,
+  },
+  {
+    side: "Low",
+    observed: "observed_spike_low_share",
+    forecast: "forecast_spike_low_share",
+    hint: `Exceptional low prices: share of quarter-hours with the imbalance price below spot − ${SPIKE_MARGIN} €/MWh, against the model's mean p_spike_low`,
+  },
+] as const satisfies readonly { side: string; observed: keyof Scores; forecast: keyof Scores; hint: string }[];
+
 const COVERAGE_LABEL = "P10–P90 coverage";
-const STRIP_LABELS = METRICS.map((metric) => metric.short);
+const STRIP_LABELS = [...METRICS.map((metric) => metric.short), ...SPIKES.map(({ side }) => `${side} spikes`)];
 
 /** Lower scores are better. The strip's title names the period, so each figure names what it is against. */
 function againstBaseline(value: number | null, reference: number | null | undefined): string {
@@ -91,6 +110,15 @@ function ScoreStrip({ performance, heading }: { performance: Performance; headin
           />
         );
       })}
+      {SPIKES.map(({ side, observed, forecast, hint }) => (
+        <Stat
+          key={side}
+          label={`${side} spikes`}
+          hint={hint}
+          value={formatPercent(model[observed])}
+          detail={`Forecast ${formatPercent(model[forecast])}`}
+        />
+      ))}
     </StatStrip>
   );
 }
@@ -129,12 +157,14 @@ function OfficialTable({ performance }: { performance: Performance }) {
 }
 
 export function HindsightScreen() {
-  const { asOf, current } = useViewingTime();
+  const { asOf, current, observedUntil } = useViewingTime();
   const wide = useIsWide();
   const across = useDefaultLayout({ id: "hindsight-across", panelIds: ["evidence", "situations"], storage: safeStorage });
   const [range, setRange] = useUrlChoice<Range>("range", ["day", "week", "month"], "week");
-  const from = current ? addHours(current, -RANGES[range].hours) : "";
-  const to = current ?? "";
+  // Nothing observed in the test period is shown, so there the period ends where it starts.
+  const end = current && observedUntil && hoursBetween(observedUntil, current) > 0 ? observedUntil : current;
+  const from = end ? addHours(end, -RANGES[range].hours) : "";
+  const to = end ?? "";
   const ready = current !== undefined;
   const stripHeading = `Diagnostic for ${RANGES[range].title}`;
 
@@ -143,8 +173,8 @@ export function HindsightScreen() {
   const observed = useQuery({ ...queries.actualsBetween(asOf, from, to), enabled: ready });
   const history = useQuery(queries.alertHistory(asOf));
   const situations = useMemo(
-    () => (history.data?.situations ?? []).filter((situation) => situation.first_origin_utc >= from),
-    [history.data, from],
+    () => (history.data?.situations ?? []).filter((situation) => situation.first_origin_utc >= from && situation.first_origin_utc <= to),
+    [history.data, from, to],
   );
 
   const scores = (

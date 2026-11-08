@@ -10,8 +10,9 @@
  *   stepped, and each step takes the colour of its own quarter-hour.
  *
  * With `happened: "edge"` (Hindsight, where every quarter-hour has both) what happened is a thin strip past
- * 100 % instead, up above and down below, so the chances look exactly as in the Now chart's forecast: a
- * pale fill with a solid edge, never broken by bars.
+ * 100 % instead, up above and down below, so the chances are never broken by bars. There solid colour means
+ * only what happened: the chances' edge is a muted tint, not the strips' solid colour, or it would read as
+ * a third strip.
  *
  * A row after the pane's heading names the values under the crosshair, its swatches the legend for both.
  */
@@ -43,6 +44,8 @@ const HAPPENED_BARS = { up: { upper: 1, lower: 0 }, down: { upper: 0, lower: -1 
 const HAPPENED_EDGE = { up: { upper: 1.16, lower: 1.05 }, down: { upper: -1.05, lower: -1.16 } };
 const SCALE = { bars: 1, edge: 1.16 };
 const CHANCE_FILL = 0.35;
+/** The chances' edge next to the edge strips: darker than the fill, clearly lighter than a strip. */
+const CHANCE_EDGE_TINT = 0.55;
 const CHANCE_LINE_WIDTH = 2;
 const WIDEST_CHANCE = "100%";
 
@@ -146,6 +149,10 @@ export class DirectionPane {
     this.surface = color("surface");
     this.pale = { up: tint(this.solid.up, CHANCE_FILL, this.surface), down: tint(this.solid.down, CHANCE_FILL, this.surface) };
     const fill = { up: withAlpha(this.solid.up, CHANCE_FILL), down: withAlpha(this.solid.down, CHANCE_FILL) };
+    const edge =
+      style === "edge"
+        ? { up: tint(this.solid.up, CHANCE_EDGE_TINT, this.surface), down: tint(this.solid.down, CHANCE_EDGE_TINT, this.surface) }
+        : this.solid;
     const percent = { type: "custom", formatter: axisPercent, minMove: 0.01 } as const;
     const whole = { priceRange: { minValue: -SCALE[style], maxValue: SCALE[style] } };
 
@@ -171,10 +178,10 @@ export class DirectionPane {
           priceLineVisible: false,
           lastValueVisible: false,
           baseValue: { type: "price", price: 0 },
-          topLineColor: this.solid.up,
+          topLineColor: edge.up,
           topFillColor1: fill.up,
           topFillColor2: fill.up,
-          bottomLineColor: this.solid.down,
+          bottomLineColor: edge.down,
           bottomFillColor1: fill.down,
           bottomFillColor2: fill.down,
           lineWidth: CHANCE_LINE_WIDTH,
@@ -208,7 +215,7 @@ export class DirectionPane {
     const place = this.style === "edge" ? HAPPENED_EDGE : HAPPENED_BARS;
     this.happened.set(happenedRuns(rows).map(({ from, to, direction }) => ({ from, to, ...place[direction], fill: this.solid[direction] })));
     // Over a bar of the same direction the chance's own colour would vanish, so its edge turns white there.
-    // Edge strips never lie under a chance, so the edge keeps its colour.
+    // Edge strips never lie under a chance, so the edge keeps its muted tint.
     const bars = this.style === "bars";
     this.up.setData(closedSteps(rows, (row) => row.pUp, (row) => (bars && row.realised === "up" ? { topLineColor: this.surface } : {})));
     this.down.setData(closedSteps(rows, (row) => below(row.pDown), (row) => (bars && row.realised === "down" ? { bottomLineColor: this.surface } : {})));

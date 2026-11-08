@@ -1,10 +1,12 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Skeleton } from "@/components/ui/skeleton";
 import { safeStorage, useIsWide } from "@/lib/browser";
+import type { PriceLevel } from "@/lib/chart/forecast-view";
 
 import { NowProvider } from "./now-context";
 import { ForecastPanel, KpiRow } from "./now-panels";
@@ -13,7 +15,10 @@ import { SituationsPanel } from "./situations";
 
 const GAP_HANDLE = "w-3 bg-transparent aria-[orientation=horizontal]:h-3 aria-[orientation=horizontal]:w-full";
 
-function WideLayout() {
+/** What another screen built on this layout changes: the box above the situations and the chart's price levels. */
+type Parts = { top?: ReactNode; levels?: readonly PriceLevel[] };
+
+function WideLayout({ top, levels }: Parts) {
   // A new storage id whenever the default split changes, so sizes saved for an older layout do not apply.
   const across = useDefaultLayout({ id: "now-across-v3", panelIds: ["evidence", "situations"], storage: safeStorage });
   return (
@@ -30,39 +35,45 @@ function WideLayout() {
           <div className="flex h-full min-h-0 flex-col gap-3">
             <KpiRow />
             <div className="min-h-0 flex-1">
-              <ForecastPanel />
+              <ForecastPanel levels={levels} />
             </div>
           </div>
         </ResizablePanel>
         <ResizableHandle className={GAP_HANDLE} aria-label="Resize the situations panel" />
         <ResizablePanel id="situations" defaultSize="34" minSize="26" maxSize="45">
-          <SituationsPanel />
+          <SituationsPanel top={top} />
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>
   );
 }
 
-function StackedLayout() {
+function StackedLayout({ top, levels }: Parts) {
   return (
     <div className="flex shrink-0 flex-col gap-3">
       <KpiRow />
       {/* The wrappers keep each box's own height: directly in this column, its h-full would span the page. */}
       <div className="shrink-0">
-        <SituationsPanel />
+        <SituationsPanel top={top} />
       </div>
       <div className="h-[56rem] shrink-0">
-        <ForecastPanel />
+        <ForecastPanel levels={levels} />
       </div>
     </div>
   );
 }
 
-export function NowScreen() {
+export function NowScreen({ top, levels }: Parts = {}) {
   const wide = useIsWide();
   return (
     <NowProvider>
-      {wide === null ? <Skeleton className="min-h-0 flex-1" /> : wide ? <WideLayout /> : <StackedLayout />}
+      {wide === null ? (
+        <Skeleton className="min-h-0 flex-1" />
+      ) : wide ? (
+        <WideLayout top={top} levels={levels} />
+      ) : (
+        <StackedLayout top={top} levels={levels} />
+      )}
       <SituationSheet />
     </NowProvider>
   );

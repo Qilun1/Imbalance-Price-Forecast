@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Check, Eye, TriangleAlert } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -65,13 +66,14 @@ function SituationCard({ alert, selected }: { alert: Alert; selected: boolean })
   );
 }
 
-export function SituationsPanel() {
+/** `top` replaces the price history above the situations, as the Naantali CHP screen does with its tabs. */
+export function SituationsPanel({ top = <PriceHistorySection /> }: { top?: ReactNode }) {
   const { asOf } = useViewingTime();
   const query = useQuery(queries.alerts(asOf));
   const { alerts, selected } = useNow();
   return (
     <Panel label="Price history and what to check now" className="h-full">
-      <PriceHistorySection />
+      {top}
       <PanelHeader title="What to check now" level={1} highlight note={alerts.length ? `${alerts.length} now` : undefined} />
       <PanelBody className="px-0 pb-0">
         <QueryState

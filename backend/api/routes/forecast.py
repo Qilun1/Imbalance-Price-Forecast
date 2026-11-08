@@ -21,7 +21,7 @@ def _drivers(text: str | None) -> list[Driver]:
 
 
 @router.get("/forecast", response_model=Forecast)
-def get_forecast(as_of: AwareDatetime | None = Query(None, description="Viewing time; the newest forecast if omitted"),
+def get_forecast(as_of: AwareDatetime | None = Query(None, description="Viewing time; start_origin_utc of /api/meta if omitted"),
                  repo: Repository = Depends(get_repository)) -> Forecast:
     moment = repo.resolve_as_of(as_of)
     origin = repo.origin_at(moment)
@@ -43,7 +43,7 @@ def get_forecast(as_of: AwareDatetime | None = Query(None, description="Viewing 
 
 
 @router.get("/changes", response_model=Changes)
-def get_changes(as_of: AwareDatetime | None = Query(None, description="Viewing time; the newest forecast if omitted"),
+def get_changes(as_of: AwareDatetime | None = Query(None, description="Viewing time; start_origin_utc of /api/meta if omitted"),
                 repo: Repository = Depends(get_repository)) -> Changes:
     moment = repo.resolve_as_of(as_of)
     origin = repo.origin_at(moment)

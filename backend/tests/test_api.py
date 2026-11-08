@@ -184,6 +184,13 @@ def test_performance_is_labelled_and_compares_with_the_baseline(client):
     assert model["overall"]["mae_p50"] < baseline["overall"]["mae_p50"]
 
 
+def test_performance_reports_high_and_low_spike_shares(client):
+    overall = client.get("/api/performance").json()["diagnostic"]["model"]["overall"]
+    for side in ("high", "low"):
+        assert 0.0 <= overall[f"observed_spike_{side}_share"] <= 1.0
+        assert 0.0 <= overall[f"forecast_spike_{side}_share"] <= 1.0
+
+
 def spot_usable_from(repo: Repository) -> pd.Series:
     return repo.observations.query("series_id == @SPOT_SERIES").set_index("timestamp_utc")["first_usable_origin_utc"]
 
@@ -291,6 +298,51 @@ def test_hindsight_rejects_a_lead_time_outside_the_horizon(client):
     assert client.get("/api/hindsight", params={"lead_hours": 11}).status_code == 422
 
 
+# ---------- the test period is replayed as if it were then ----------
+CUT = mock.FIRST_ORIGIN + pd.Timedelta(hours=72)        # stands in for the first test origin
+
+
+@pytest.fixture()
+def cut_client(repo):
+    cut = Repository(replace(repo.settings, observed_until=CUT))
+    app.dependency_overrides[get_repository] = lambda: cut
+    yield TestClient(app)
+    app.dependency_overrides.clear()
+
+
+def test_the_dashboard_opens_at_the_first_test_forecast(cut_client):
+    meta = cut_client.get("/api/meta").json()
+    assert meta["start_origin_utc"] == meta["observed_until_utc"] == iso(CUT)
+    assert cut_client.get("/api/forecast").json()["origin_utc"] == iso(CUT)
+
+
+def test_mock_data_has_no_cut_and_opens_at_the_newest_forecast(client):
+    meta = client.get("/api/meta").json()
+    assert meta["observed_until_utc"] is None and meta["start_origin_utc"] == meta["last_origin_utc"]
+
+
+def test_nothing_observed_in_the_test_period_is_served(cut_client, repo):
+    as_of = CUT + pd.Timedelta(days=2)
+    window = {"as_of": iso(as_of), "from": iso(CUT - pd.Timedelta(days=1)), "to": iso(as_of + pd.Timedelta(days=2))}
+    points = cut_client.get("/api/actuals", params=window).json()["points"]
+    shown = pd.to_datetime([p["delivery_start_utc"] for p in points], utc=True)
+    assert len(shown) and shown.max() < CUT
+    usable = repo.observations.set_index(["series_id", "timestamp_utc"])["first_usable_origin_utc"]
+    priced = pd.to_datetime([p["delivery_start_utc"] for p in points if p["imbalance_price"] is not None], utc=True)
+    assert (usable.loc["fi_imbalance_price"].loc[priced] <= CUT).all(), "as known at the cut, not later"
+
+    hindsight = cut_client.get("/api/hindsight", params={**window, "lead_hours": 1}).json()
+    assert max(p["delivery_start_utc"] for p in hindsight["points"]) < iso(CUT)
+    history = cut_client.get("/api/alerts/history", params={"as_of": iso(as_of)}).json()["situations"]
+    assert all(s["outcome"] in ("pending", "not_applicable") for s in history if s["alert"]["window_start_utc"] >= iso(CUT))
+
+
+def test_test_forecasts_are_still_served(cut_client):
+    as_of = CUT + pd.Timedelta(days=2)
+    body = cut_client.get("/api/forecast", params={"as_of": iso(as_of)}).json()
+    assert body["origin_utc"] == iso(as_of) and len(body["steps"]) == 40
+
+
 def test_every_model_feature_has_a_label():
     metas = sorted(ARTIFACTS_DIR.glob("*/meta.json"))   # models are not tracked: only those trained locally
     if not metas:
@@ -351,12 +403,22 @@ def test_real_spot_is_served_only_from_its_first_usable_origin(real_client, real
 
 @needs_real
 def test_real_actuals_match_the_organisers_rule(real_client, real_repo):
-    as_of = pd.Timestamp("2026-10-20T08:00:00Z")
-    body = real_client.get("/api/actuals", params={"as_of": iso(as_of), "from": "2026-10-19T00:00:00Z",
-                                                   "to": "2026-10-22T00:00:00Z"}).json()
+    as_of = pd.Timestamp("2026-09-20T08:00:00Z")
+    body = real_client.get("/api/actuals", params={"as_of": iso(as_of), "from": "2026-09-19T00:00:00Z",
+                                                   "to": "2026-09-22T00:00:00Z"}).json()
     usable = real_repo.observations.query("series_id == 'fi_imbalance_price'").set_index("timestamp_utc")["first_usable_origin_utc"]
     shown = pd.to_datetime([p["delivery_start_utc"] for p in body["points"] if p["imbalance_price"] is not None], utc=True)
     assert (usable.loc[shown] <= as_of).all() and shown.max() == as_of - pd.Timedelta(minutes=75)
+
+
+@needs_real
+def test_real_data_opens_at_the_test_period_and_shows_nothing_observed_in_it(real_client):
+    meta = real_client.get("/api/meta").json()
+    assert meta["start_origin_utc"] == meta["observed_until_utc"] == iso(TEST_FIRST_ORIGIN)
+    assert real_client.get("/api/forecast").json()["origin_utc"] == iso(TEST_FIRST_ORIGIN)
+    late = {"as_of": meta["last_origin_utc"], "from": "2026-09-01T00:00:00Z", "to": "2026-11-03T00:00:00Z"}
+    points = real_client.get("/api/actuals", params=late).json()["points"]
+    assert max(p["delivery_start_utc"] for p in points) < iso(TEST_FIRST_ORIGIN)
 
 
 @needs_real

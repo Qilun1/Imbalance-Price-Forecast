@@ -84,6 +84,12 @@ export function formatMegawatts(value: Maybe): string {
   return isNumber(value) ? `${grouped(value, value % 1 === 0 ? 0 : 1)} MW` : NO_VALUE;
 }
 
+/** A count of quarter-hours as hours, as "3.5 h" or "3.25 h". */
+export function formatQuarterHours(quarters: Maybe): string {
+  if (!isNumber(quarters)) return NO_VALUE;
+  return `${grouped(quarters / 4, quarters % 4 === 0 ? 0 : quarters % 2 === 0 ? 1 : 2)} h`;
+}
+
 export function formatMinutes(minutes: Maybe): string {
   if (!isNumber(minutes)) return NO_VALUE;
   const whole = Math.round(minutes);
