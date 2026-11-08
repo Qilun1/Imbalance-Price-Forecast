@@ -73,8 +73,7 @@ Versions are the ones pinned in `uv.lock` and `frontend/package-lock.json`.
 | httpx | 0.28.1 | BSD-3-Clause | API tests (dev) |
 | pytest | 9.2.0 | MIT | Tests (dev) |
 | React, React DOM | 19.3.1 | MIT | Dashboard UI |
-| Vite | 8.3.6 | MIT | Frontend build |
-| @vitejs/plugin-react | 6.2.1 | MIT | Frontend build |
+| Next.js and the other dashboard packages | see `docs/frontend-licences.md` | MIT, Apache-2.0, ISC and others, listed there | Dashboard UI and build |
 | TypeScript | 5.9.3 | Apache-2.0 | Frontend language |
 | openapi-typescript | 7.13.0 | MIT | Typed API client generation |
 | @types/react, @types/react-dom | 19.3.0 | MIT | Type definitions |
@@ -84,6 +83,9 @@ Services: Fingrid Open Data API (free registration, API key), Open-Meteo Single 
 non-commercial tier, within its 10,000 calls a day limit) and the Overpass API (public instance,
 `overpass-api.de`). AI coding assistants (Claude) were used to write and review code; all outputs were
 checked with the organiser's validator, scorer and our leakage check.
+
+Our own code and documentation: Apache-2.0 (`LICENSE`), copyright team KODA and contributors; the
+`NOTICE` file carries the attribution and lists what the licence does not cover.
 
 ## 4. Obligations and open points
 

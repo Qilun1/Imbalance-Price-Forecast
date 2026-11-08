@@ -1,0 +1,22 @@
+Volta: imbalance price forecast and operator dashboard
+Copyright 2026 Team KODA and contributors
+
+Built by team KODA for the Since AI 2026 hackathon, Turku Energia challenge.
+Original repository: https://github.com/Qilun1/Imbalance-Price-Forecast
+
+This product includes software developed by team KODA, licensed under the Apache License,
+Version 2.0 (see LICENSE). Anyone who redistributes this work or a derivative of it must keep this
+NOTICE file, or its attribution text, with the distribution (Apache License 2.0, section 4(d)).
+
+Not covered by this licence:
+
+- tools/starter_package/: the challenge organiser's starter package (scripts, templates, baseline
+  notebook and README), provided by Turku Energia and included unchanged. Its terms are the
+  organiser's.
+- Data. No data is included in this repository. Nord Pool spot price data is licensed to Turku
+  Energia for the hackathon only and may not be redistributed. Fingrid and ENTSO-E data are CC BY 4.0;
+  the other sources and their licences are listed in docs/SOURCES_AND_LICENCES.md.
+- Third-party software components, which keep their own licences
+  (docs/SOURCES_AND_LICENCES.md, docs/frontend-licences.md).
+- The names "Volta" and "KODA" and their logos (frontend/public/). The licence grants no rights to
+  use them (Apache License 2.0, section 6), except to describe where the work came from.

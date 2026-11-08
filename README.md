@@ -235,6 +235,15 @@ score for the reasoning chain) and a situational view for traders and shift supe
 hourly origins x 40 steps, forecast "as if then"). The brief, starter package and scoring scripts are
 the organiser's; the package data is not redistributed here.
 
+## License
+
+Our code and documentation are licensed under the [Apache License 2.0](LICENSE): anyone may use,
+change and build on them, also commercially, as long as they keep the copyright and the
+[NOTICE](NOTICE) file crediting team KODA. Not covered: the organiser's `tools/starter_package/`, the
+data (none is included; Nord Pool spot data may not be redistributed), third-party components, and
+the Volta and KODA names and logos. Sources and licences:
+[`docs/SOURCES_AND_LICENCES.md`](docs/SOURCES_AND_LICENCES.md).
+
 ---
 
 <p align="center"><sub>Volta · team KODA · Since AI 2026</sub></p>
