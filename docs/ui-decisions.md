@@ -274,6 +274,17 @@ The prompt ranks above `DESIGN.md`, which ranks above skills.
   hour late, so the last four quarter-hours before the viewing time had a forecast and no actual, which read
   as a forecast into the future. Every line now ends at the last known actual (`upToLastActual`). Gaps earlier
   in the period stay gaps, and the API is unchanged.
+- **API screen, essentials only**, team decision, 8 Nov, for the brief's Level 2 "plus an API from which this
+  information can be retrieved for display". Sidebar "API", key `4`, route `/api-guide` (`/api` itself is
+  what `next.config.ts` sends to the backend). It assumes the model's forecasts are loaded and the API runs in
+  real mode (`docs/LIVE_DEPLOYMENT.md`, step 4), so it holds one box, Pull the data: four endpoints, one
+  PowerShell example, `as_of` and the spot rule in one line each. The interactive docs button holds the rest.
+  The title and the box form one column, at most 56rem wide, centred in the page and 2rem lower than the other
+  screens' content, team decision.
+  Cut down the same night, team decisions: a first version with a status strip, long steps, every endpoint,
+  examples in three languages, the live JSON answer and a rules box was too much, and a second one with a
+  status line and start-up commands still showed more than the instructions. The example names the forecast
+  fields it prints, so it never prints the spot price (rule 6). No new tokens or libraries.
 
 ## Libraries beyond the prompt's list
 
