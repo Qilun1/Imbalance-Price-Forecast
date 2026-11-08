@@ -77,38 +77,38 @@ export function SituationsPanel({ top = <PriceHistorySection />, scroll = "list"
   return (
     <Panel label="Price history and what to check now" className="h-full">
       <div className={cn("flex min-h-0 flex-1 flex-col", scroll === "panel" && "overflow-y-auto")}>
-      {top}
-      <PanelHeader title="What to check now" level={1} highlight note={alerts.length ? `${alerts.length} now` : undefined} />
-      <PanelBody className={cn("px-0 pb-0", scroll === "panel" && "flex-none")}>
-        <QueryState
-          query={query}
-          isEmpty={(data) => data.alerts.length === 0}
-          empty={
-            <PanelMessage icon={Check} title="Nothing to check">
-              No situation stands out in the next 10 hours. The forecast updates every hour.
-            </PanelMessage>
-          }
-          skeleton={
-            <div className="flex flex-col gap-2 px-4" aria-hidden>
-              {[0, 1, 2].map((key) => (
-                <Skeleton key={key} className="h-16 w-full" />
-              ))}
-            </div>
-          }
-        >
-          {() => (
-            <ScrollArea className="h-full">
-              <ul className="flex flex-col gap-2 px-4 pb-4">
-                {alerts.map((alert) => (
-                  <li key={`${alert.kind}|${alert.title}|${alert.window_start_utc}`}>
-                    <SituationCard alert={alert} selected={isSameSituation(alert, selected)} />
-                  </li>
+        {top}
+        <PanelHeader title="What to check now" level={1} highlight note={alerts.length ? `${alerts.length} now` : undefined} />
+        <PanelBody className={cn("px-0 pb-0", scroll === "panel" && "flex-none")}>
+          <QueryState
+            query={query}
+            isEmpty={(data) => data.alerts.length === 0}
+            empty={
+              <PanelMessage icon={Check} title="Nothing to check">
+                No situation stands out in the next 10 hours. The forecast updates every hour.
+              </PanelMessage>
+            }
+            skeleton={
+              <div className="flex flex-col gap-2 px-4" aria-hidden>
+                {[0, 1, 2].map((key) => (
+                  <Skeleton key={key} className="h-16 w-full" />
                 ))}
-              </ul>
-            </ScrollArea>
-          )}
-        </QueryState>
-      </PanelBody>
+              </div>
+            }
+          >
+            {() => (
+              <ScrollArea className="h-full">
+                <ul className="flex flex-col gap-2 px-4 pb-4">
+                  {alerts.map((alert) => (
+                    <li key={`${alert.kind}|${alert.title}|${alert.window_start_utc}`}>
+                      <SituationCard alert={alert} selected={isSameSituation(alert, selected)} />
+                    </li>
+                  ))}
+                </ul>
+              </ScrollArea>
+            )}
+          </QueryState>
+        </PanelBody>
       </div>
     </Panel>
   );
