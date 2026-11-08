@@ -28,7 +28,7 @@ persistence baseline: MAE -38 %, pinball -53 %, spike Brier -23 %, direction Bri
 | [`backend/api/README.md`](backend/api/README.md) | The dashboard API: routes, `as_of` viewing time, model settings |
 | [`frontend/README.md`](frontend/README.md) | The Next.js dashboard: running, tests, structure |
 | [`static_data/README.md`](static_data/README.md) | Data layout (raw pulls, DuckDB store, feature tables, submissions); all gitignored |
-| [`docs/plans/`](docs/plans/), [`docs/frontend-plan.md`](docs/frontend-plan.md), [`docs/ui-decisions.md`](docs/ui-decisions.md), `FRONTEND_BUILD_PROMPT.md` | Working notes and build logs from the event; kept for traceability, not needed to run anything |
+| [`docs/plans/`](docs/plans/), [`docs/frontend-plan.md`](docs/frontend-plan.md), [`docs/ui-decisions.md`](docs/ui-decisions.md), [`docs/FRONTEND_BUILD_PROMPT.md`](docs/FRONTEND_BUILD_PROMPT.md) | Working notes and build logs from the event; kept for traceability, not needed to run anything |
 | [`AGENTS.md`](AGENTS.md) | Rules for contributors and coding agents: no data in git, organiser package read-only, fixed formats, availability rule |
 | `tools/starter_package/` | The organiser's package, unchanged: validator, scorer, templates, their README (the source of truth for formats and scoring) |
 
