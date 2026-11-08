@@ -1,20 +1,64 @@
-# Imbalance Price Forecast: Since AI 2026, Turku Energia challenge
+<h1 align="center">Volta</h1>
 
-**Team KODA**: Atte Laakso (data pipeline, features, models, evaluation) and Qilun Li
-(dashboard, API, alerts, slides, video). Built 6-8 Nov 2026 at the Since AI hackathon in Turku;
-submitted 8 Nov 2026 10:00 EET. Coding agents (Claude) were used throughout; `AGENTS.md` holds the
-rules they worked under.
+<p align="center">
+  <b>10-hour imbalance price forecast and situational dashboard</b><br>
+  Team KODA · Since AI 2026 · Turku Energia challenge
+</p>
+
+<p align="center">
+  MAE <b>−38 %</b> · pinball <b>−53 %</b> · spike Brier <b>−23 %</b> · direction Brier <b>−15 %</b><br>
+  <sub>against the organiser's baseline, validation period 7 Sep – 4 Oct 2026</sub>
+</p>
+
+<p align="center">
+  <a href="docs/EVALUATION.md">Evaluation report</a> ·
+  <a href="docs/SOURCES_AND_LICENCES.md">Sources and licences</a> ·
+  <a href="docs/slides/">Slides</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#reproduce-the-submission">Reproduce</a>
+</p>
+
+---
+
+**Team KODA:** Atte Laakso (data pipeline, features, models, evaluation) and Qilun Li (dashboard, API,
+alerts, slides, video). Built 6–8 Nov 2026 at the Since AI hackathon in Turku; submitted 8 Nov 2026
+10:00 EET. Coding agents (Claude) were used throughout; [`AGENTS.md`](AGENTS.md) holds the rules they
+worked under.
 
 ## What this is
 
-A 10-hour-ahead forecast of the Finnish imbalance price in 15-minute steps (P10/P50/P90, probability
-of up / down / no regulation direction, probability of a price more than 50 EUR/MWh above or below
-spot), produced every full hour under the organiser's data availability rule, and a situational
-dashboard that shows an energy trader or shift supervisor what to check now and over the next 10
-hours, with alerts, drivers and hindsight performance. The model is a LightGBM structural mixture
-(regulation direction first, price given direction second) fed by the starter package, Fingrid
-real-time grid state and two NWP weather sources. Validation skill against the organiser's
-persistence baseline: MAE -38 %, pinball -53 %, spike Brier -23 %, direction Brier -15 %.
+**The forecast.** A 10-hour-ahead forecast of the Finnish imbalance price in 15-minute steps: P10 / P50
+/ P90, the probability of up / down / no regulation, and the probability of a price more than
+50 EUR/MWh above or below spot. It is produced every full hour under the organiser's data availability
+rule. The model is a LightGBM structural mixture (regulation direction first, price given direction
+second) fed by the starter package, Fingrid real-time grid state and two NWP weather sources.
+
+**The dashboard.** A situational view that shows an energy trader or shift supervisor what to check now
+and over the next 10 hours, with alerts, drivers and hindsight performance, plus a CHP screen for the
+plant operator.
+
+## Quick start
+
+Requires [uv](https://docs.astral.sh/uv/) (Python 3.11–3.13) and, for the dashboard, Node 20+.
+
+```bash
+git clone https://github.com/Qilun1/Imbalance-Price-Forecast && cd Imbalance-Price-Forecast
+uv sync                                  # Python environment
+git config core.hooksPath .githooks      # once per clone: blocks commits that contain data
+cp .env.example .env                     # fill in FINGRID_API_KEY (free, data.fingrid.fi)
+uv run pytest -q                         # 146 tests, no data needed
+```
+
+Dashboard on invented mock data (no licensed files needed):
+
+```powershell
+.\start-dashboard.cmd          # Windows; other systems: frontend/README.md
+```
+
+Dashboard on the real backtest (`start-dashboard.cmd real`) needs the forecast store, which the
+reproduction below builds. The organiser's starter package data (`inputs.parquet`, `spot_nordpool.csv`,
+`actuals_validation.csv`) is not in this repository; `tools.cli ingest starter --src <path>` copies it to
+`static_data/raw/starter/`.
 
 ## Documentation map
 
@@ -38,8 +82,8 @@ persistence baseline: MAE -38 %, pinball -53 %, spike Brier -23 %, direction Bri
 |---|---|
 | `backend/imbalance/` | Core package: data store with availability-masked readers, feature building, mixture model, inference, forecast store |
 | `backend/api/` | FastAPI app for the dashboard (forecast, alerts, hindsight, performance, UMM feed) |
-| `backend/fuel/` | Reference fuel and CO2 prices and Naantali marginal costs, for the dashboard's Naantali CHP screen (display only, not a model input) |
-| `backend/tests/` | pytest suite (134 tests), including the no-data-in-git check |
+| `backend/fuel/` | Reference fuel and CO2 prices and Naantali marginal costs, for the dashboard's CHP screen (display only, not a model input) |
+| `backend/tests/` | pytest suite (146 tests), including the no-data-in-git check |
 | `backend/artifacts/`, `backend/infer_data/` | Trained models and inferred forecasts (gitignored, rebuilt by the pipeline) |
 | `frontend/` | Next.js 16 / React 19 dashboard |
 | `mockup/` | Earlier plain-HTML mockup of the alert chat, served at `/mockup` |
@@ -49,47 +93,24 @@ persistence baseline: MAE -38 %, pinball -53 %, spike Brier -23 %, direction Bri
 | `tools/hooks/` | The pre-commit hook that blocks data files |
 | `static_data/` | Source data and DuckDB store (gitignored) |
 
-## Quick start
-
-Requires [uv](https://docs.astral.sh/uv/) (Python 3.11-3.13) and, for the dashboard, Node 20+.
-
-```bash
-git clone https://github.com/Qilun1/Imbalance-Price-Forecast && cd Imbalance-Price-Forecast
-uv sync                                  # Python environment
-git config core.hooksPath .githooks      # once per clone: blocks commits that contain data
-cp .env.example .env                     # fill in FINGRID_API_KEY (free, data.fingrid.fi)
-uv run pytest -q                         # 134 tests, no data needed
-```
-
-Dashboard on invented mock data (no licensed files needed):
-
-```powershell
-.\start-dashboard.cmd          # Windows; other systems: frontend/README.md
-```
-
-Dashboard on the real backtest (`start-dashboard.cmd real`) needs the forecast store, which the
-reproduction below builds. The organiser's starter package data (`inputs.parquet`, `spot_nordpool.csv`,
-`actuals_validation.csv`) is not in this repository; `tools.cli ingest starter --src <path>` copies it to
-`static_data/raw/starter/`.
-
 ## Dependencies
 
-- Python: pandas, NumPy, PyArrow, DuckDB, LightGBM, scikit-learn, requests, PyYAML, FastAPI, Uvicorn,
-  Matplotlib (`pyproject.toml`, pinned in `uv.lock`). Dev: pytest, httpx.
-- Frontend: Next.js, React, TypeScript, Tailwind (`frontend/package.json`, pinned in `package-lock.json`).
-- External services: Fingrid Open Data API (key), Open-Meteo Single Runs API (free tier),
+- **Python:** pandas, NumPy, PyArrow, DuckDB, LightGBM, scikit-learn, requests, PyYAML, FastAPI,
+  Uvicorn, Matplotlib (`pyproject.toml`, pinned in `uv.lock`). Dev: pytest, httpx.
+- **Frontend:** Next.js, React, TypeScript, Tailwind (`frontend/package.json`, pinned in `package-lock.json`).
+- **External services:** Fingrid Open Data API (key), Open-Meteo Single Runs API (free tier),
   OpenStreetMap Overpass (static snapshot), Nord Pool UMM API (dashboard only).
-- Versions and licences of all of the above: `docs/SOURCES_AND_LICENCES.md` section 3.
+- Versions and licences of all of the above: [`docs/SOURCES_AND_LICENCES.md`](docs/SOURCES_AND_LICENCES.md) section 3.
 
 ## Ground rules
 
 - `tools/starter_package/` is the organiser's locked package. Never edit it. Its validator
   (`validate_submission.py`) and scorer (`score.py`) are the source of truth.
-- Data availability: at forecast origin `t`, a row is used only if `first_usable_origin_utc <= t`.
+- **Data availability:** at forecast origin `t`, a row is used only if `first_usable_origin_utc <= t`.
   Every source we add gets the same column with a documented, conservative delay.
 - **Never commit data** (`AGENTS.md` rule 0): only code, configs, docs, slides and our own trained
   models. The pre-commit hook and `uv run pytest` both enforce it.
-- Nord Pool spot data is licensed to Turku Energia for the hackathon only: never in git, logs or
+- **Nord Pool spot data** is licensed to Turku Energia for the hackathon only: never in git, logs or
   hosted services; deleted after the event.
 
 ## Final model and results
@@ -104,17 +125,17 @@ averaged, the P10-P90 band gets validation-fitted per-situation widths, and the 
 are averaged 50/50 with the previous chain (`ens_mixgd_spk_bw`). The full reasoning chain, ablations
 and negative results are in [`docs/EVALUATION.md`](docs/EVALUATION.md).
 
-Validation period 7 Sep - 4 Oct 2026, organiser's `score.py` 0.1.1 (schema 1.0, spike margin 50):
+Validation period 7 Sep – 4 Oct 2026, organiser's `score.py` 0.1.1 (schema 1.0, spike margin 50):
 
 | Level 1 metric (lower is better) | Organiser baseline | `ens_finald` |
-|---|---|---|
-| MAE of p50 (EUR/MWh) | 66.20 | **40.98** (-38 %) |
-| Mean pinball loss p10/p90 | 24.18 | **11.31** (-53 %) |
+|---|---:|---:|
+| MAE of p50 (EUR/MWh) | 66.20 | **40.98** (−38 %) |
+| Mean pinball loss p10/p90 | 24.18 | **11.31** (−53 %) |
 | P10-P90 coverage (target about 0.80) | 0.683 | 0.819 |
-| Mean Brier, spike high/low | 0.1132 | **0.0873** (-23 %) |
-| Three-class Brier, direction | 0.4509 | **0.3848** (-15 %) |
+| Mean Brier, spike high/low | 0.1132 | **0.0873** (−23 %) |
+| Three-class Brier, direction | 0.4509 | **0.3848** (−15 %) |
 
-How it was validated: the validation models are trained only on targets usable before the first
+**How it was validated.** The validation models are trained only on targets usable before the first
 validation origin (2026-09-06T21:00Z); the band widths are scored leave-one-validation-week-out; the
 spike hedge weight is fixed, not fitted; model choices were made on paired day-block bootstraps of
 these validation scores (`tools/eval/bootstrap_compare.py`). The final models are retrained on targets
@@ -191,8 +212,9 @@ The submission is `static_data/work/submissions/ens_finald_test.csv` (submit it 
 `forecast_backtest.csv`); every step runs the organiser's validator or scorer. The previous
 submission `ens_final` is kept as the fallback: the same chain with v9 / v9m (`mix_v9b`, `mix_v9mb`) in
 place of v9d / v9md and without the `d` in the names (`ens_bag8`, `ens_mixg`, `ens_final`). More commands:
-`tools/README.md`. Dashboard: `backend/api/README.md` (API, runs on mock data without licensed files)
-and `frontend/README.md`. Data sources and licences: `docs/SOURCES_AND_LICENCES.md`.
+[`tools/README.md`](tools/README.md). Dashboard: [`backend/api/README.md`](backend/api/README.md) (API,
+runs on mock data without licensed files) and [`frontend/README.md`](frontend/README.md). Data sources
+and licences: [`docs/SOURCES_AND_LICENCES.md`](docs/SOURCES_AND_LICENCES.md).
 
 ## Going live
 
@@ -204,11 +226,15 @@ checks before relying on it.
 
 Calling the API from scripts or other apps instead of the dashboard: [`backend/api/README.md`](backend/api/README.md).
 
-## Challenge in one paragraph
+## The challenge
 
 Turku Energia asked for a 10-hour imbalance price forecast with calibrated uncertainty, direction and
 spike probabilities (Level 1, 80 %, scored automatically against a persistence baseline plus a jury
 score for the reasoning chain) and a situational view for traders and shift supervisors (Level 2,
-20 %, jury). Training data 1 Jun - 4 Oct 2026, validation 7 Sep - 4 Oct, test 5 Oct - 1 Nov (673
+20 %, jury). Training data 1 Jun – 4 Oct 2026, validation 7 Sep – 4 Oct, test 5 Oct – 1 Nov (673
 hourly origins x 40 steps, forecast "as if then"). The brief, starter package and scoring scripts are
 the organiser's; the package data is not redistributed here.
+
+---
+
+<p align="center"><sub>Volta · team KODA · Since AI 2026</sub></p>

@@ -66,16 +66,20 @@ function SituationCard({ alert, selected }: { alert: Alert; selected: boolean })
   );
 }
 
-/** `top` replaces the price history above the situations, as the Naantali CHP screen does with its tabs. */
-export function SituationsPanel({ top = <PriceHistorySection /> }: { top?: ReactNode }) {
+/**
+ * `top` replaces the price history above the situations, as the CHP screen does with its tabs.
+ * `scroll` "panel" scrolls the whole column as one, for a `top` too tall to leave the list room of its own.
+ */
+export function SituationsPanel({ top = <PriceHistorySection />, scroll = "list" }: { top?: ReactNode; scroll?: "list" | "panel" }) {
   const { asOf } = useViewingTime();
   const query = useQuery(queries.alerts(asOf));
   const { alerts, selected } = useNow();
   return (
     <Panel label="Price history and what to check now" className="h-full">
+      <div className={cn("flex min-h-0 flex-1 flex-col", scroll === "panel" && "overflow-y-auto")}>
       {top}
       <PanelHeader title="What to check now" level={1} highlight note={alerts.length ? `${alerts.length} now` : undefined} />
-      <PanelBody className="px-0 pb-0">
+      <PanelBody className={cn("px-0 pb-0", scroll === "panel" && "flex-none")}>
         <QueryState
           query={query}
           isEmpty={(data) => data.alerts.length === 0}
@@ -105,6 +109,7 @@ export function SituationsPanel({ top = <PriceHistorySection /> }: { top?: React
           )}
         </QueryState>
       </PanelBody>
+      </div>
     </Panel>
   );
 }

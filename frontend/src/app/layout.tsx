@@ -5,7 +5,7 @@ import { fraunces, inter, jetbrainsMono } from "./fonts";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Imbalance price forecast",
+  title: "Volta · Imbalance price forecast",
   description: "What to check now and in the next 10 hours in the Finnish imbalance market.",
 };
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Alert, ForecastStep, FuelSnapshot, UmmMessage } from "@/lib/api/client";
 import { formatQuarterHours } from "@/lib/format";
-import { costLevels, costLight, fuelRows, heatPlan, na4Messages, plantSide } from "@/lib/operator";
+import { costLight, fuelRows, heatCosts, heatPlan, na4Messages, plantSide } from "@/lib/operator";
 
 function step(index: number, fields: Partial<ForecastStep> = {}): ForecastStep {
   return {
@@ -68,6 +68,7 @@ const snapshot = {
       { fuel: "forest_chips", fuel_eur_mwh_incl_co2: 38, power_cost_after_heat_credit: 10 },
     ],
   },
+  assumptions: { EB: { eta: 0.5, adders_eur_mwh: 5 } },
 } as FuelSnapshot;
 
 describe("plantSide", () => {
@@ -115,14 +116,25 @@ describe("fuelRows", () => {
   });
 });
 
-describe("costLevels", () => {
-  it("draws the break-even in green, then the priced fuels cheapest first, the dearest in red", () => {
-    expect(costLevels(snapshot)).toEqual([
-      { title: "E-boiler", price: 36.8, tone: "down" },
-      { title: "Chips", price: 10, tone: "warning" },
-      { title: "Peat", price: 45, tone: "up" },
+describe("heatCosts", () => {
+  it("puts both boilers in euros per MWh of heat, skipping quarter-hours without spot", () => {
+    const mixed = [step(0, { spot: 10 }), step(1, { spot: 50 }), step(2, { spot: null })];
+    expect(heatCosts(mixed, snapshot)).toEqual([
+      { time: mixed[0]!.delivery_start_utc, electric: 30, chips: 43 },
+      { time: mixed[1]!.delivery_start_utc, electric: 110, chips: 43 },
     ]);
-    expect(costLevels(undefined)).toEqual([]);
+  });
+
+  it("agrees with the break-even spot on which boiler is cheaper", () => {
+    const breakEven = 43 * 0.5 - 5;
+    const around = [step(0, { spot: breakEven - 1 }), step(1, { spot: breakEven + 1 })];
+    expect(heatCosts(around, snapshot).map((point) => (point.electric < point.chips ? "electric" : "fuel"))).toEqual(
+      heatPlan(around, breakEven),
+    );
+  });
+
+  it("is empty without a chip boiler price", () => {
+    expect(heatCosts(steps, { ...snapshot, heat: { ...snapshot.heat, heat_only_boiler_eur_mwh: null } })).toEqual([]);
   });
 });
 

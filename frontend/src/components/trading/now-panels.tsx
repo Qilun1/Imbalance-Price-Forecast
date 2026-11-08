@@ -9,7 +9,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import type { ActualPoint } from "@/lib/api/client";
-import type { PriceLevel } from "@/lib/chart/forecast-view";
 import { queries } from "@/lib/api/queries";
 import { formatClock, formatEuro, formatPercent, PRICE_UNIT } from "@/lib/format";
 import { type Figure, figureWindow, headline, windowOf } from "@/lib/forecast";
@@ -87,7 +86,7 @@ const SPANS = [
 ] as const;
 type Span = (typeof SPANS)[number]["value"];
 
-export function ForecastPanel({ levels }: { levels?: readonly PriceLevel[] }) {
+export function ForecastPanel() {
   const { asOf, isPast, observedUntil } = useViewingTime();
   const forecast = useQuery(queries.forecast(asOf));
   const { alerts, selected, figure } = useNow();
@@ -164,7 +163,6 @@ export function ForecastPanel({ levels }: { levels?: readonly PriceLevel[] }) {
               windows={windows}
               focus={focus}
               spanHours={spanHours}
-              levels={levels}
             />
           )}
         </QueryState>

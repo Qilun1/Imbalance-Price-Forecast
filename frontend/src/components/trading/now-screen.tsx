@@ -6,7 +6,6 @@ import { useDefaultLayout } from "react-resizable-panels";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Skeleton } from "@/components/ui/skeleton";
 import { safeStorage, useIsWide } from "@/lib/browser";
-import type { PriceLevel } from "@/lib/chart/forecast-view";
 
 import { NowProvider } from "./now-context";
 import { ForecastPanel, KpiRow } from "./now-panels";
@@ -15,10 +14,10 @@ import { SituationsPanel } from "./situations";
 
 const GAP_HANDLE = "w-3 bg-transparent aria-[orientation=horizontal]:h-3 aria-[orientation=horizontal]:w-full";
 
-/** What another screen built on this layout changes: the box above the situations and the chart's price levels. */
-type Parts = { top?: ReactNode; levels?: readonly PriceLevel[] };
+/** What another screen built on this layout changes: the box above the situations, and how that column scrolls. */
+type Parts = { top?: ReactNode; scroll?: "list" | "panel" };
 
-function WideLayout({ top, levels }: Parts) {
+function WideLayout({ top, scroll }: Parts) {
   // A new storage id whenever the default split changes, so sizes saved for an older layout do not apply.
   const across = useDefaultLayout({ id: "now-across-v3", panelIds: ["evidence", "situations"], storage: safeStorage });
   return (
@@ -35,20 +34,20 @@ function WideLayout({ top, levels }: Parts) {
           <div className="flex h-full min-h-0 flex-col gap-3">
             <KpiRow />
             <div className="min-h-0 flex-1">
-              <ForecastPanel levels={levels} />
+              <ForecastPanel />
             </div>
           </div>
         </ResizablePanel>
         <ResizableHandle className={GAP_HANDLE} aria-label="Resize the situations panel" />
         <ResizablePanel id="situations" defaultSize="34" minSize="26" maxSize="45">
-          <SituationsPanel top={top} />
+          <SituationsPanel top={top} scroll={scroll} />
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>
   );
 }
 
-function StackedLayout({ top, levels }: Parts) {
+function StackedLayout({ top }: Parts) {
   return (
     <div className="flex shrink-0 flex-col gap-3">
       <KpiRow />
@@ -57,22 +56,22 @@ function StackedLayout({ top, levels }: Parts) {
         <SituationsPanel top={top} />
       </div>
       <div className="h-[56rem] shrink-0">
-        <ForecastPanel levels={levels} />
+        <ForecastPanel />
       </div>
     </div>
   );
 }
 
-export function NowScreen({ top, levels }: Parts = {}) {
+export function NowScreen({ top, scroll }: Parts = {}) {
   const wide = useIsWide();
   return (
     <NowProvider>
       {wide === null ? (
         <Skeleton className="min-h-0 flex-1" />
       ) : wide ? (
-        <WideLayout top={top} levels={levels} />
+        <WideLayout top={top} scroll={scroll} />
       ) : (
-        <StackedLayout top={top} levels={levels} />
+        <StackedLayout top={top} />
       )}
       <SituationSheet />
     </NowProvider>

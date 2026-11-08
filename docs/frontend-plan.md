@@ -60,7 +60,7 @@ the verification loop.
 
 ### App shell, on every route
 
-- **Sidebar:** 240 px, collapses to a 64 px rail, ink band. Now, Next 10 h, Hindsight, Naantali CHP, API.
+- **Sidebar:** 240 px, collapses to a 64 px rail, ink band. Now, Next 10 h, Hindsight, CHP, API.
 - **Top bar:** `ViewingTimeControl`, `ForecastStamp`, ⌘K trigger, all in UTC.
 - **Situation timeline:** a thin strip under the top bar with one mark per hour of the whole period,
   showing when situations occurred. Click to jump there.

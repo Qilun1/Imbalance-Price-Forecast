@@ -11,7 +11,7 @@ uv run pytest backend/tests/test_fuel.py     # offline tests
 ```
 
 Served by the dashboard API as `GET /api/fuel/snapshot` (router registered in `backend/api/main.py`)
-and shown on the dashboard's Naantali CHP screen (`/operator`). The screen calls it without `spot`:
+and shown on the dashboard's CHP screen (`/operator`). The screen calls it without `spot`:
 a spot value in the query string would land in the API's access log (AGENTS.md rule 6). It compares
 the forecast's spot with `heat.e_boiler_cheaper_below_spot` instead.
 

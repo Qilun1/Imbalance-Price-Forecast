@@ -1,4 +1,4 @@
-# Evaluation report, full details: 10-hour Finnish imbalance price forecast
+# Volta: evaluation report, full details
 
 This is the long version. The short report the jury should read first is [EVALUATION.md](EVALUATION.md).
 

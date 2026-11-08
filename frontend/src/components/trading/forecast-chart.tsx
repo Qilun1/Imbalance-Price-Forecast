@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import type { ActualPoint, Forecast } from "@/lib/api/client";
 import { readDirection } from "@/lib/chart/direction-pane";
-import { buildRows, type ChartRow, type ChartWindow, ForecastView, type PriceLevel, rowTime } from "@/lib/chart/forecast-view";
+import { buildRows, type ChartRow, type ChartWindow, ForecastView, rowTime } from "@/lib/chart/forecast-view";
 import {
   formatDateTime,
   formatPrice,
@@ -72,7 +72,6 @@ export default function ForecastChart({
   windows,
   focus,
   spanHours,
-  levels,
 }: {
   forecast: Forecast;
   history: readonly ActualPoint[];
@@ -82,8 +81,6 @@ export default function ForecastChart({
   focus: { start: string; end: string } | null;
   /** Hours of history in view when the chart opens; null for all of it. */
   spanHours: number | null;
-  /** Fixed prices across the chart, such as the plant's cost levels on the Naantali CHP screen. */
-  levels?: readonly PriceLevel[];
 }) {
   const host = useRef<HTMLDivElement>(null);
   const readout = useRef<HTMLDivElement>(null);
@@ -117,9 +114,9 @@ export default function ForecastChart({
     const focused = focus ? rows.find((row) => row.time === toUnixSeconds(focus.start)) : undefined;
     resting.current = focused ?? rows.find((row) => row.p50 !== null) ?? null;
     lastDecided.current = rows.findLast((row) => row.realised !== null) ?? null;
-    view.current?.update({ rows, origin: forecast.origin_utc, windows, focus, spanHours, levels });
+    view.current?.update({ rows, origin: forecast.origin_utc, windows, focus, spanHours });
     show(null);
-  }, [rows, forecast.origin_utc, windows, focus, spanHours, levels, show]);
+  }, [rows, forecast.origin_utc, windows, focus, spanHours, show]);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">

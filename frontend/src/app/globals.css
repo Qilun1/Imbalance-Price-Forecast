@@ -104,10 +104,31 @@ html {
   animation: flash-down 400ms var(--ease-out);
 }
 
+/* The operator screen's "!" mark: a soft glow in its own colour. */
+@keyframes glow {
+  from {
+    text-shadow: 0 0 2px currentColor;
+  }
+  to {
+    text-shadow:
+      0 0 6px currentColor,
+      0 0 10px currentColor;
+  }
+}
+
+.glow {
+  animation: glow 1.2s ease-in-out infinite alternate;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .flash-up,
   .flash-down {
     animation: none;
+  }
+
+  .glow {
+    animation: none;
+    text-shadow: 0 0 6px currentColor;
   }
 
   *,

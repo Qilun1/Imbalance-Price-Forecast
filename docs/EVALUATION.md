@@ -1,10 +1,22 @@
-# Evaluation report: 10-hour Finnish imbalance price forecast
+# Volta: evaluation report for the 10-hour Finnish imbalance price forecast
 
-Team KODA, Since AI 2026, Turku Energia challenge. Submission `ens_finald`
+Team KODA, Since AI 2026, Turku Energia challenge.
+
+**At a glance**
+
+| | |
+|---|---|
+| Validation metrics vs. the organiser's baseline | MAE -38 %, pinball -53 %, coverage 0.82 (target 0.80), spike Brier -23 %, direction Brier -15 %; better in 100 % of bootstrap resamples |
+| Reasoning chain | The price is a rule (rebuilt 99.6 %); only the regulation direction and the balancing price are uncertain; so: direction first, then price given direction, one distribution for P50, band and spike risk |
+| Factors affecting the forecast | Direction follows physical forecasts (48 % of SHAP); the near-term up price follows the market state (49 %); the down price follows spot (57-63 %); real-time grid state adds -5 % direction Brier in the first hour |
+| Data and availability | Organiser package + Fingrid measured wind and real-time grid state + two NWP sources, all behind one availability mask; leakage check PASS on 350 origins |
+| What it enables | 1 MW of flexibility dispatched on the probabilities earns about 15 kEUR/yr (persistence rule 10, perfect foresight 51); a panel that says what to check and how likely it is |
+
+Submission `ens_finald`
 (`forecast_backtest.csv`, 673 origins x 40 steps = 26,920 rows; `validate_submission.py` 0 errors,
 0 warnings). All scores are from the organiser's `score.py` on the validation period 7 Sep - 4 Oct
 2026 (26,700 scored rows), from models trained only on targets usable before the first validation
-origin. This report covers the three items the brief asks for: the **validation-period metrics** (section 1),
+origin. The sections below cover the three items the brief asks for: the **validation-period metrics** (section 1),
 the **reasoning chain** (section 2: what we noticed in the data, and what that made the model) and
 the **factors affecting the forecast** (section 3), then what the forecast enables (section 4). The
 full account of every experiment, ablation and the reproduction commands is in

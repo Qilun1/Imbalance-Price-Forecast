@@ -1,9 +1,8 @@
 /**
- * The Naantali CHP screen: the Now screen with the plant's fuel figures beside it. These helpers decide what
+ * The CHP screen: the Now screen with the plant's fuel figures beside it. These helpers decide what
  * those figures say and which of them a situation points at. They suggest where to look, never what to do.
  */
 import type { Alert, ForecastStep, FuelSnapshot, UmmMessage } from "@/lib/api/client";
-import type { PriceLevel } from "@/lib/chart/forecast-view";
 import { stepsInWindow, windowOf } from "@/lib/forecast";
 
 /** Unit name of NA4 in Nord Pool's UMM. */
@@ -64,27 +63,19 @@ export const FUEL_LABELS: Record<string, string> = {
   heavy_fuel_oil: "Heavy fuel oil",
 };
 
-/** Short names for the price axis, where space is tight. */
-const AXIS_LABELS: Record<string, string> = { forest_chips: "Chips", milled_peat: "Peat", srf: "SRF", coal: "Coal" };
+export type HeatCostPoint = { time: string; electric: number; chips: number };
 
 /**
- * The plant's cost levels as lines on the price chart: green, the electric boiler's break-even spot (below it,
- * electric heat is cheaper than chips); then NA4's power cost per priced fuel, the dearest in red.
+ * € per MWh of heat at each quarter-hour, both on one scale: the electric boiler at that quarter-hour's spot
+ * price, with grid fee and tax, against the chip boiler's cost. Where electric is lower, it is the cheaper heat.
  */
-export function costLevels(snapshot: FuelSnapshot | undefined): PriceLevel[] {
-  if (!snapshot) return [];
-  const breakEven = snapshot.heat.e_boiler_cheaper_below_spot;
-  const fuels = snapshot.chp.by_fuel
-    .flatMap(({ fuel, power_cost_after_heat_credit: cost }) => (cost === null ? [] : [{ fuel, cost }]))
-    .sort((a, b) => a.cost - b.cost);
-  return [
-    ...(breakEven === null ? [] : [{ title: "E-boiler", price: breakEven, tone: "down" }]),
-    ...fuels.map(({ fuel, cost }, index) => ({
-      title: AXIS_LABELS[fuel] ?? fuel,
-      price: cost,
-      tone: index === fuels.length - 1 && fuels.length > 1 ? "up" : "warning",
-    })),
-  ];
+export function heatCosts(steps: readonly ForecastStep[], snapshot: FuelSnapshot): HeatCostPoint[] {
+  const chips = snapshot.heat.heat_only_boiler_eur_mwh;
+  const { eta, adders_eur_mwh: adders } = snapshot.assumptions.EB;
+  if (chips === null) return [];
+  return steps.flatMap((step) =>
+    step.spot === null ? [] : [{ time: step.delivery_start_utc, electric: (step.spot + adders) / eta, chips }],
+  );
 }
 
 /** Traffic light for a fuel's power cost: green, the average forecast covers it; yellow, only the peak; red, not even the peak. */

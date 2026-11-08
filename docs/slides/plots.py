@@ -15,28 +15,25 @@ out = f"{U}/docs/slides/img"
 import os; os.makedirs(out, exist_ok=True)
 def save(name): plt.tight_layout(); plt.savefig(f"{out}/{name}.png", dpi=200, facecolor="white"); plt.close()
 
-# 1. Fan chart of one real origin: pick an origin with a spike in horizon and decent forecast
-o = m.groupby("forecast_origin_utc")
-cand = o.apply(lambda d: ((d.spread.abs() > 50).sum() >= 4) & (d.err.mean() < 45)).pipe(lambda s: s[s].index)
-sel = None
-for c in cand:
-    d = m[m.forecast_origin_utc == c]
-    if d.p_spike_high.max() > 0.35 or d.p_spike_low.max() > 0.35: sel = c; break
-if sel is None: sel = cand[len(cand)//2]
-d = m[m.forecast_origin_utc == sel].sort_values("step")
-t = np.arange(1, 41) * 0.25
-fig, (a1, a2) = plt.subplots(2, 1, figsize=(8.6, 5.2), gridspec_kw={"height_ratios": [3, 1.1]}, sharex=True)
-a1.fill_between(t, d.p10, d.p90, color=O3, alpha=0.6, label="P10–P90 band")
-a1.plot(t, d.p50, color=O, lw=2.5, label="P50")
-a1.plot(t, d.spot_price, color=G2, lw=1.5, ls="--", label="Spot (known)")
-a1.plot(t, d.imbalance_price, color=K, lw=1.8, marker="o", ms=3.5, label="Actual")
-a1.set_ylabel("EUR/MWh"); a1.set_ylim(-40, 260); a1.legend(loc="upper left", frameon=False, ncol=4, fontsize=10)
-a1.set_title(f"One forecast, {pd.Timestamp(sel).strftime('%d %b %H:%M')} UTC, 40 quarter-hours ahead")
-a2.bar(t - 0.06, d.p_spike_high * 100, width=0.11, color=O, label="P(spike high)")
-a2.bar(t + 0.06, d.p_spike_low * 100, width=0.11, color=O3, label="P(spike low)")
-a2.plot(t, d.p_up * 100, color=K, lw=1.2, label="P(up-regulation)")
-a2.set_ylim(0, 100); a2.set_ylabel("%"); a2.set_xlabel("hours after forecast origin"); a2.legend(loc="upper left", frameon=False, ncol=3, fontsize=9)
-save("fan")
+# 1. Fan chart of real origins (chosen: spikes present, band covering, spike probability raised before the spike)
+def fan(sel, name):
+    d = m[m.forecast_origin_utc == sel].sort_values("step")
+    t = np.arange(1, 41) * 0.25
+    fig, (a1, a2) = plt.subplots(2, 1, figsize=(8.6, 5.2), gridspec_kw={"height_ratios": [3, 1.1]}, sharex=True)
+    a1.fill_between(t, d.p10, d.p90, color=O3, alpha=0.6, label="P10–P90 band")
+    a1.plot(t, d.p50, color=O, lw=2.5, label="P50")
+    a1.plot(t, d.spot_price, color=G2, lw=1.5, ls="--", label="Spot (known)")
+    a1.plot(t, d.imbalance_price, color=K, lw=1.8, marker="o", ms=3.5, label="Actual")
+    a1.set_ylabel("EUR/MWh"); a1.legend(loc="upper left", frameon=False, ncol=4, fontsize=10)
+    a1.set_title(f"One forecast, issued {pd.Timestamp(sel).strftime('%d %b %H:%M')} UTC, next 10 hours")
+    a2.bar(t - 0.06, d.p_spike_high * 100, width=0.11, color=O, label="P(spike high)")
+    a2.bar(t + 0.06, d.p_spike_low * 100, width=0.11, color=O3, label="P(spike low)")
+    a2.plot(t, d.p_up * 100, color=K, lw=1.2, label="P(up-regulation)")
+    a2.set_ylim(0, 100); a2.set_ylabel("%"); a2.set_xlabel("hours after forecast origin"); a2.legend(loc="upper left", frameon=False, ncol=3, fontsize=9)
+    save(name)
+for sel, name in (("2026-09-24T22:00:00Z", "fan"), ("2026-09-29T15:00:00Z", "fan_b"), ("2026-09-11T06:00:00Z", "fan_c")):
+    fan(sel, name)
+sel = "2026-09-24T22:00:00Z"
 
 # 2. Bimodal spread histogram colored by direction
 fig, ax = plt.subplots(figsize=(6.2, 4.2))

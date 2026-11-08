@@ -17,7 +17,7 @@ export const SCREENS: readonly { href: string; label: string; icon: LucideIcon }
   { href: "/", label: "Now", icon: Activity },
   { href: "/next-10h", label: "Next 10 h", icon: Table2 },
   { href: "/hindsight", label: "Hindsight", icon: History },
-  { href: "/operator", label: "Naantali CHP", icon: Factory },
+  { href: "/operator", label: "CHP", icon: Factory },
   { href: "/api-guide", label: "API", icon: Braces },
 ];
 
@@ -82,7 +82,7 @@ export function Sidebar({ startsAsRail }: { startsAsRail: boolean }) {
   return (
     <aside className={cn("on-dark hidden shrink-0 flex-col bg-ink-band-soft text-on-dark md:flex", rail ? "w-sidebar-rail items-center" : "w-sidebar")}>
       <div className={cn("flex h-topbar shrink-0 items-center", rail ? "justify-center" : "px-4")}>
-        <span className="text-base font-semibold text-on-dark">{rail ? "IF" : "Imbalance forecast"}</span>
+        <span className="text-base font-semibold text-on-dark">{rail ? "V" : "Volta"}</span>
       </div>
       <nav aria-label="Screens" className={cn("flex flex-1 flex-col gap-1", rail ? "items-center" : "px-3")}>
         {SCREENS.map((screen) => (

@@ -184,4 +184,7 @@ integration needs a licensed spot source first (`docs/LIVE_DEPLOYMENT.md`, steps
 
 Mock data lives in `backend/infer_data/mock_forecasts.duckdb` (gitignored). `mock.py` is invented from
 a seed, reads none of the organiser's files, and scripts one of each situation; see `SCENARIOS` there.
-Its spot price is invented too. An older mock file without spot is rebuilt automatically on start-up.
+Its spot price is invented too, from rules of thumb for a Nordic market (daily peaks, windy days, cheaper
+weekends), and the imbalance price follows it with runs of regulation and short spike episodes. The
+newest forecast, where mock mode opens, shows one situation about 2 hours ahead and an expert review
+later in the 10 hours. An older mock file without spot is rebuilt automatically on start-up.

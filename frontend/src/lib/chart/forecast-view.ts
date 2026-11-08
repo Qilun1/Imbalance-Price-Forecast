@@ -18,7 +18,6 @@ import {
   AreaSeries,
   createChart,
   type IChartApi,
-  type IPriceLine,
   type ISeriesApi,
   LineSeries,
   LineStyle,
@@ -114,9 +113,6 @@ function band(rows: readonly ChartRow[], upper: (row: ChartRow) => number | null
 
 export type ChartWindow = { start: string; end: string; selected: boolean; severity: Alert["severity"] };
 
-/** A fixed price drawn across the chart with its name on the price axis, such as a plant's cost level. `tone` is a colour token. */
-export type PriceLevel = { title: string; price: number; tone: string };
-
 export type ChartInput = {
   rows: readonly ChartRow[];
   origin: string;
@@ -125,7 +121,6 @@ export type ChartInput = {
   focus: { start: string; end: string } | null;
   /** Hours of history in view when the chart opens, left of the forecast; null for all of it. */
   spanHours: number | null;
-  levels?: readonly PriceLevel[];
 };
 
 export class ForecastView {
@@ -136,7 +131,6 @@ export class ForecastView {
   private readonly outcome: ISeriesApi<"Line">;
   private readonly fan: StepBand;
   private readonly direction: DirectionPane;
-  private levelLines: IPriceLine[] = [];
   /** One per pane; the first carries the forecast line's tag. */
   private readonly marks: readonly TimeMarks[];
   private rows = new Map<number, ChartRow>();
@@ -208,7 +202,7 @@ export class ForecastView {
     });
   }
 
-  update({ rows, origin, windows, focus, spanHours, levels = [] }: ChartInput): void {
+  update({ rows, origin, windows, focus, spanHours }: ChartInput): void {
     this.order = [...rows];
     this.rows = new Map(rows.map((row) => [row.time, row]));
 
@@ -219,11 +213,6 @@ export class ForecastView {
     this.outcome.setData(series(rows, (row) => row.outcome));
 
     this.direction.update(rows);
-
-    for (const line of this.levelLines) this.p50.removePriceLine(line);
-    this.levelLines = levels.map(({ title, price, tone }) =>
-      this.p50.createPriceLine({ price, title, color: color(tone), lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true }),
-    );
 
     // Only the situation picked on the right is shaded: overlapping windows stacked into a dark block.
     // Red for Review and yellow for Watch, like the badges. Both stay see-through: the prediction interval

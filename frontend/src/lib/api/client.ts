@@ -36,7 +36,7 @@ export type UmmMessage = Schemas["UmmMessage"];
 
 /**
  * /api/fuel/snapshot returns a plain dict (backend/fuel/service.py build_snapshot), so it has no generated
- * schema. Only the fields the Naantali CHP screen reads. Prices EUR/MWh, null where no price is known.
+ * schema. Only the fields the CHP screen reads. Prices EUR/MWh, null where no price is known.
  */
 export type FuelSnapshot = {
   label: string;
@@ -47,6 +47,8 @@ export type FuelSnapshot = {
     unit: string;
     by_fuel: { fuel: string; fuel_eur_mwh_incl_co2: number | null; power_cost_after_heat_credit: number | null }[];
   };
+  /** The electric boiler's efficiency and its grid fee, tax and other costs per MWh of electricity. */
+  assumptions: { EB: { eta: number; adders_eur_mwh: number } };
   errors: Record<string, string>;
 };
 

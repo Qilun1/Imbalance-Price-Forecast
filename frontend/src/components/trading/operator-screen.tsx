@@ -1,14 +1,16 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Eye, TriangleAlert } from "lucide-react";
+import dynamic from "next/dynamic";
 import { type ReactNode, useMemo } from "react";
+
+import { Skeleton } from "@/components/ui/skeleton";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { queries } from "@/lib/api/queries";
 import { formatClock, formatMegawatts, formatPrice, formatQuarterHours } from "@/lib/format";
-import { costLevels, costLight, FUEL_LABELS, fuelRows, heatPlan, na4Messages, plantSide } from "@/lib/operator";
+import { costLight, FUEL_LABELS, fuelRows, heatCosts, heatPlan, na4Messages, plantSide } from "@/lib/operator";
 import { useViewingTime } from "@/lib/realtime/viewing-time";
 import { cn } from "@/lib/utils";
 
@@ -19,13 +21,15 @@ import { PriceHistoryTable } from "./price-history";
 
 const NONE: never[] = [];
 
+const HeatChart = dynamic(() => import("./heat-chart"), { ssr: false, loading: () => <Skeleton className="h-36 w-full" /> });
+
 /** NA4's rating in Nord Pool UMM. */
 const NA4_MW = 145;
 
 const TEXT = { green: "text-down", yellow: "text-warning", red: "text-error-text" } as const;
 const RING = { review: "ring-2 ring-error", watch: "ring-2 ring-warning" } as const;
 
-/** Ringed, with a "Look here" mark, when the situation in focus is about this part of the plant. */
+/** Ringed, with a glowing "!" mark, when the situation in focus is about this part of the plant. */
 function Figure({
   label,
   value,
@@ -53,9 +57,12 @@ function Figure({
 
 function LookHere({ severity }: { severity: "review" | "watch" }) {
   return (
-    <span className={cn("flex shrink-0 items-center gap-0.5 font-medium", severity === "review" ? "text-error-text" : "text-warning")}>
-      {severity === "review" ? <TriangleAlert className="size-3" aria-hidden /> : <Eye className="size-3" aria-hidden />}
-      Look here
+    <span
+      role="img"
+      aria-label="Look here"
+      className={cn("glow shrink-0 px-0.5 text-sm leading-none font-bold", severity === "review" ? "text-error-text" : "text-warning")}
+    >
+      !
     </span>
   );
 }
@@ -69,6 +76,7 @@ function FuelTab() {
   const { selected } = useNow();
 
   const steps = forecast.data?.steps ?? NONE;
+  const heat = useMemo(() => (fuel.data ? heatCosts(steps, fuel.data) : NONE), [steps, fuel.data]);
   if (fuel.isError) {
     return <p className="px-2 py-3 text-sm text-error-text">Fuel prices could not be loaded. Restart the API if it predates the fuel route.</p>;
   }
@@ -120,6 +128,27 @@ function FuelTab() {
           }
         />
       </div>
+      <section aria-label="Heat cost" className="px-1">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 px-1 text-xs">
+          <h3 className="font-medium text-ink">Heat cost, €/MWh of heat</h3>
+          <p className="flex items-center gap-3 text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-0.5 w-3 bg-down" aria-hidden />
+              E-boiler at spot
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-3 border-t border-dashed border-ink" aria-hidden />
+              Chip boiler {formatPrice(fuel.data.heat.heat_only_boiler_eur_mwh)}
+            </span>
+          </p>
+        </div>
+        {heat.length ? (
+          <HeatChart points={heat} />
+        ) : (
+          <p className="px-1 py-3 text-xs text-muted-foreground">No spot prices for these hours yet.</p>
+        )}
+        <p className="px-1 text-xs text-muted-foreground">Green: the e-boiler is cheaper. Yellow: the chip boiler is.</p>
+      </section>
       <div className={cn("rounded-md px-1", lookFuel && RING[lookFuel])}>
         {lookFuel ? (
           <p className="flex justify-end px-1 pt-1 text-xs">
@@ -180,7 +209,7 @@ function OperatorTabs() {
   return (
     <Tabs defaultValue="fuel" className="shrink-0 gap-1 border-b border-hairline-soft px-2 pt-3 pb-2">
       <div className="flex items-center justify-between gap-2 px-2">
-        <h2 className="eyebrow text-stone">Naantali CHP</h2>
+        <h2 className="eyebrow text-stone">CHP</h2>
         <TabsList>
           <TabsTrigger value="fuel">Fuel</TabsTrigger>
           <TabsTrigger value="history">Price history</TabsTrigger>
@@ -196,10 +225,8 @@ function OperatorTabs() {
   );
 }
 
-/** The Now screen for the Naantali plant operator: the same chart and situations, with the plant's cost levels drawn on the chart. */
+/** The Now screen for the Naantali plant operator: the same chart and situations, with the plant's fuel figures beside them. */
 export function OperatorScreen() {
-  const fuel = useQuery(queries.fuel());
-  // Kept stable: the chart resets its view whenever its inputs change.
-  const levels = useMemo(() => costLevels(fuel.data), [fuel.data]);
-  return <NowScreen top={<OperatorTabs />} levels={levels} />;
+  // The fuel figures leave the situations little height, so the column scrolls as one.
+  return <NowScreen top={<OperatorTabs />} scroll="panel" />;
 }

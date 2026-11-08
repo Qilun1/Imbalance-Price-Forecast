@@ -5,7 +5,9 @@ from the seeded generator below, so the result holds no licensed data and is saf
 use the same tables as real data (`forecasts`, `observations`), so the API has one code path.
 
 The week crosses the daylight saving change of 25 Oct and scripts one of each situation the dashboard
-has to surface, listed in SCENARIOS. Output: backend/infer_data/mock_forecasts.duckdb (gitignored).
+has to surface, listed in SCENARIOS. The last forecast, where the dashboard opens, shows one situation
+a couple of hours ahead and a more serious one later in the 10 hours.
+Output: backend/infer_data/mock_forecasts.duckdb (gitignored).
 
 Run from the repo root:  uv run python -m backend.api.mock
 """
@@ -28,6 +30,7 @@ FIRST_ORIGIN = pd.Timestamp("2026-10-21T21:00:00Z")   # 22 Oct 00:00 Helsinki
 N_ORIGINS = 168                                       # one week of hourly forecasts
 HISTORY = pd.Timedelta(days=3)                        # actuals before the first forecast
 LAST_KNOWN_LAG = 5                                    # newest usable quarter-hour starts 75 min before the origin
+EASE = pd.Timedelta(minutes=90)                       # scripted situations build up and fade over this long
 NORMAL_DRIVERS = ["cons_fc", "wind_fc", "resid_load_fc", "solar_fc", "spot_vs_horizon_mean", "dir_mean4",
                   "spread_mean4", "wind_fc_change_vs_lag", "hour_local", "se1_flow_last"]
 
@@ -59,6 +62,12 @@ SCENARIOS = (
              "cons_fc;wind_fc;hour_local"),
     Scenario("conflicting_signals", _ts("2026-10-27T20:00:00Z"), _ts("2026-10-28T03:00:00Z"), _ts("2026-10-28T05:00:00Z"),
              "dir_mean4;spread_max16;cons_fc"),
+    # seen from the last forecast (28 Oct 20:00 UTC): a high-price risk in about 2 hours, and later
+    # expected up-regulation in a wide range, which together call for an expert review
+    Scenario("spike_risk_soon", _ts("2026-10-28T20:00:00Z"), _ts("2026-10-28T22:00:00Z"), _ts("2026-10-28T23:30:00Z"),
+             "cons_fc;wind_fc_change_vs_lag;spot_vs_horizon_mean"),
+    Scenario("review_later", _ts("2026-10-28T20:00:00Z"), _ts("2026-10-29T03:00:00Z"), _ts("2026-10-29T05:00:00Z"),
+             "wind_fc;resid_load_fc;dir_mean4"),
 )
 _BY_NAME = {s.name: s for s in SCENARIOS}
 
@@ -72,19 +81,45 @@ def _grid() -> pd.DatetimeIndex:
     return pd.date_range(FIRST_ORIGIN - HISTORY, last_delivery, freq=STEP)
 
 
-def _actual_series(grid: pd.DatetimeIndex, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """(level, price, direction) per quarter-hour. `level` is an invented daily shape and doubles as
-    the mock's spot price, so spike risk and direction relate to it the way they do to the real one."""
-    local = grid.tz_convert("Europe/Helsinki")
+def _ar1(n: int, keep: float, noise: float, rng: np.random.Generator) -> np.ndarray:
+    out = np.zeros(n)
+    for i in range(1, n):
+        out[i] = keep * out[i - 1] + rng.normal(0.0, noise)
+    return out
+
+
+def _spot(grid: pd.DatetimeIndex, rng: np.random.Generator) -> np.ndarray:
+    """An invented day-ahead price with a familiar Nordic shape, from rules of thumb, not from any data:
+    a daily level that falls on windy days, morning and evening peaks that flatten when it is windy,
+    cheaper weekends, and windy nights that dip below zero."""
+    local = grid.tz_convert(DISPLAY_TZ)
     hour = np.asarray(local.hour + local.minute / 60.0)
-    level = 24.0 + 15.0 * np.sin(2 * np.pi * (hour - 6.0) / 24.0)
+    weekend = np.asarray(local.dayofweek >= 5)
+    days = np.asarray((grid - grid[0]) / pd.Timedelta(days=1))
+    knots = np.arange(int(days.max()) + 2)
+    wind = np.interp(days, knots, _expit(_ar1(len(knots), 0.7, 1.2, rng) + 0.3))   # 0 calm, 1 windy
+    daily = np.interp(days, knots, 62.0 + _ar1(len(knots), 0.6, 12.0, rng)) - 72.0 * wind
+    peaks = 30.0 * np.exp(-((hour - 8.5) / 1.6) ** 2) + 42.0 * np.exp(-((hour - 18.0) / 2.0) ** 2)
+    night = 22.0 * np.exp(-((hour - 3.5) / 2.5) ** 2)
+    level = daily + (peaks * np.where(weekend, 0.6, 1.0) - night) * (1.0 - 0.6 * wind)
+    return np.round(level + rng.normal(0.0, 2.5, len(grid)), 2)
+
+
+def _actual_series(grid: pd.DatetimeIndex, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """(spot, price, direction) per quarter-hour. The imbalance price follows spot, apart from the
+    regulation direction, which comes in runs of a few hours, and the size of regulation, which is
+    usually modest but flares up in short episodes with heavy tails, as balancing prices do."""
+    level = _spot(grid, rng)
+    local = grid.tz_convert(DISPLAY_TZ)
+    evening = np.asarray((local.hour >= 16) & (local.hour < 21))
     direction = np.empty(len(grid))
     state = -1.0
     for i in range(len(grid)):
-        if rng.random() < 0.10:
-            state = -state
+        if rng.random() < 0.07:
+            state = 1.0 if rng.random() < (0.55 if evening[i] else 0.35) else -1.0
         direction[i] = 0.0 if rng.random() < 0.004 else state
-    size = rng.gamma(2.0, 13.0, len(grid))
+    stress = np.clip(_ar1(len(grid), 0.85, 0.5, rng), 0.0, None)
+    size = rng.gamma(1.6, 9.0, len(grid)) * np.exp(1.3 * stress) * np.where(direction > 0, 1.3, 0.8)
     price = level + direction * size
     for name, extra in (("spike_risk_rising", 130.0), ("large_revision", 55.0)):
         s = _BY_NAME[name]
@@ -121,7 +156,7 @@ def _model_rows(grid: pd.DatetimeIndex, level: np.ndarray, price: np.ndarray, rn
     below = 18.0 + 1.1 * steps[None, :] * np.ones(d_idx.shape)
     above = 30.0 + 1.6 * steps[None, :] * np.ones(d_idx.shape)
     excess = p50 - level[d_idx]
-    p_up = np.clip(_expit(excess / 18.0 - 0.6), 0.05, 0.95)
+    p_up = np.clip(_expit(excess / 30.0 - 0.5), 0.08, 0.92)
     high = 0.02 + 0.20 * _expit((excess - 50.0) / 18.0)
     low = 0.02 + 0.20 * _expit((-excess - 40.0) / 18.0)
     combos = np.array([";".join(rng.choice(NORMAL_DRIVERS, 3, replace=False)) for _ in range(40)], dtype=object)
@@ -159,6 +194,29 @@ def _model_rows(grid: pd.DatetimeIndex, level: np.ndarray, price: np.ndarray, rn
     p_up[conflict] = 0.15
     high[conflict] = 0.42
     drivers[conflict] = _BY_NAME[s].drivers
+
+    def eased(origin_from: str, scenario: str) -> np.ndarray:
+        """1 inside the window, easing to 0 over EASE on both sides, so the situation builds and fades
+        the way a real forecast does instead of switching on for exactly its window."""
+        sc = _BY_NAME[scenario]
+        first, last = sc.delivery_from.to_datetime64(), (sc.delivery_to - STEP).to_datetime64()
+        outside = np.maximum(np.maximum(first - delivery, delivery - last), np.timedelta64(0, "ns")) / EASE.to_timedelta64()
+        weight = 0.5 * (1.0 + np.cos(np.pi * np.minimum(outside, 1.0)))
+        return np.where(origin_m >= _ts(origin_from).to_datetime64(), weight, 0.0)
+
+    s = "spike_risk_soon"
+    building, sooner = eased("2026-10-28T19:00:00Z", s), eased("2026-10-28T20:00:00Z", s)
+    high += 0.18 * building + 0.30 * sooner
+    p50 += 12.0 * building + 16.0 * sooner     # below the revision threshold, so this stays one watch-level situation
+    drivers[when("2026-10-28T19:00:00Z", None, s)] = _BY_NAME[s].drivers
+
+    s = "review_later"
+    leaning = eased("2026-10-28T18:00:00Z", s)
+    p_up += leaning * (0.86 - p_up)
+    widening = 1.0 + 1.6 * eased("2026-10-28T19:00:00Z", s)
+    below *= widening
+    above *= widening
+    drivers[when("2026-10-28T18:00:00Z", None, s)] = _BY_NAME[s].drivers
 
     stale = (origin_m >= _ts("2026-10-27T09:00:00Z").to_datetime64()) & (origin_m <= _ts("2026-10-27T11:00:00Z").to_datetime64())
     cutoff[stale] = cutoff[stale] - np.timedelta64(3, "h")
