@@ -39,7 +39,7 @@ persistence baseline: MAE -38 %, pinball -53 %, spike Brier -23 %, direction Bri
 | `backend/imbalance/` | Core package: data store with availability-masked readers, feature building, mixture model, inference, forecast store |
 | `backend/api/` | FastAPI app for the dashboard (forecast, alerts, hindsight, performance, UMM feed) |
 | `backend/fuel/` | Fuel-cost reference panel backend (not wired into the dashboard) |
-| `backend/tests/` | pytest suite (134 tests), including the no-data-in-git check |
+| `backend/tests/` | pytest suite (140 tests; 17 need the data store and skip without it), including the no-data-in-git check |
 | `backend/artifacts/`, `backend/infer_data/` | Trained models and inferred forecasts (gitignored, rebuilt by the pipeline) |
 | `frontend/` | Next.js 16 / React 19 dashboard |
 | `mockup/` | Earlier plain-HTML mockup of the alert chat, served at `/mockup` |
@@ -58,14 +58,17 @@ git clone https://github.com/Qilun1/Imbalance-Price-Forecast && cd Imbalance-Pri
 uv sync                                  # Python environment
 git config core.hooksPath .githooks      # once per clone: blocks commits that contain data
 cp .env.example .env                     # fill in FINGRID_API_KEY (free, data.fingrid.fi)
-uv run pytest -q                         # 134 tests, no data needed
+uv run pytest -q                         # 123 pass without data, 17 skip until the store is built
 ```
 
-Dashboard on invented mock data (no licensed files needed):
+Dashboard on invented mock data (no licensed files needed; the page shows a "Demo data" banner):
 
 ```powershell
 .\start-dashboard.cmd          # Windows; other systems: frontend/README.md
 ```
+
+The dashboard loads its fonts from Google Fonts at build and first start, so `npm run build` / `npm run dev`
+need internet access (or a proxy in `HTTPS_PROXY`).
 
 Dashboard on the real backtest (`start-dashboard.cmd real`) needs the forecast store, which the
 reproduction below builds. The organiser's starter package data (`inputs.parquet`, `spot_nordpool.csv`,
@@ -193,6 +196,17 @@ submission `ens_final` is kept as the fallback: the same chain with v9 / v9m (`m
 place of v9d / v9md and without the `d` in the names (`ens_bag8`, `ens_mixg`, `ens_final`). More commands:
 `tools/README.md`. Dashboard: `backend/api/README.md` (API, runs on mock data without licensed files)
 and `frontend/README.md`. Data sources and licences: `docs/SOURCES_AND_LICENCES.md`.
+
+## Extending this
+
+- A new data source: `tools/README.md` (ingest commands, `series_catalog` and the availability rule), then
+  `docs/SOURCES_AND_LICENCES.md` for its licence row. `AGENTS.md` rules 3-4 are binding.
+- A new feature set or model: `tools/training/` (YAML configs, `mixture_pipeline.py`, `bag.py`),
+  evaluated with `tools/eval/` against the organiser's scorer; record the result in `docs/EVALUATION.md`.
+- A new dashboard panel or alert: `backend/api/README.md` (endpoints, settings, rules built into the API),
+  `frontend/README.md` (screens, tokens, tests), decisions in `docs/ui-decisions.md`.
+- Running it on live data: next section.
+- What to build next and why: `docs/EVALUATION.md` section 6 (limitations, and 6.1 next steps not built).
 
 ## Going live
 

@@ -419,6 +419,31 @@ from new information rather than more data of the same kind.
   validation scores slightly optimistic. We limited it by choosing between few, physically motivated
   variants, by checking the width week by week, and by bootstrap checks.
 
+### 6.1 Not built: next steps, in the order we would take them
+
+Each item reuses the pipeline as it stands (new series go through `tools/ingest/` and `series_catalog`
+with a documented publication delay, AGENTS.md rules 3-4; new members through `tools/training/` and
+`tools/eval/`).
+
+1. **Fingrid minute-resolution balancing feeds** at the origin: calculated imbalance (397), activated
+   mFRR (342), dominating direction (369), aFRR prices and volumes (345-355), real-time mFRR prices
+   (400-402), wind forecast revisions (245 vs 246). Publication latency is undocumented, so measure it
+   first (`tools/eval/fingrid_delay.py`) and stamp `first_usable_origin_utc` from the measurement.
+2. **Targets recomputed under the 1 June 2026 price rule** from the published mFRR and aFRR components,
+   so that pre-June history becomes usable training data without inflating spike rates.
+3. **Two-stage model:** a wind and consumption forecast-error stage trained on the long public Fingrid
+   forecast/actual history (NWP archives reach back years), feeding the short-history market model.
+4. **Adaptive conformal band widths** per horizon block, updated online on recent residuals, in place
+   of the validation-fitted per-situation widths.
+5. **Outage messages (UMM) as features**, stamped by their publication time; today they are shown in
+   the dashboard only.
+6. **Richer market structure:** a merit-order / bid-ladder representation per direction, a learned
+   wind power curve at more NWP points, Swedish wind forecast error.
+
+Tested and not adopted (details in section 4): spike-clustering and longer direction history beyond
+v9d, multi-model weather disagreement, a spike logit shift on top of the bagged mixture. The MARI
+changes planned for Q1 2027 alter the pricing rule again; item 2 is what makes that transition cheap.
+
 ## 7. Reproduce
 
 Requires `FINGRID_API_KEY` (free). The Open-Meteo pulls use the free tier and resume from their cache.

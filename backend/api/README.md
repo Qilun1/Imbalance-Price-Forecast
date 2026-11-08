@@ -1,7 +1,7 @@
 # api
 
 FastAPI service behind the dashboard. It runs on invented mock data by default, so it needs no
-licensed files.
+licensed files; `/api/meta` then reports `mode: "mock"` and the dashboard shows a "Demo data" banner.
 
 **Deploying it on live data:** `docs/LIVE_DEPLOYMENT.md` is the plan (data, hourly job, the settings
 below with their live values, where it may run). This file is the reference: settings, endpoints,
@@ -153,7 +153,7 @@ integration needs a licensed spot source first (`docs/LIVE_DEPLOYMENT.md`, steps
 - **Licence:** only `DISPLAY_SERIES` in `repository.py` is ever loaded. Spot may reach the dashboard and
   nowhere else (AGENTS.md rule 6): never log it, export it or serve this API from a hosted service. The
   dashboard derives spot + 50 and spot - 50 from `spike_margin_eur_mwh` in `/api/meta`.
-- **Models:** validation dates use `lgbm_v1-val`, which is out of sample. `lgbm_v1` is in-sample there.
+- **Models:** validation dates use a `-val` model (default `ens_finald-val`), trained before the validation period. The final model is in-sample there.
 - **Scores:** `official` is the organiser's `score.py` output and the number to quote. `diagnostic`
   calls their `compute_metrics()` over a window and is labelled as a diagnostic. Test-period diagnostics
   are for display only (AGENTS.md rule 4).

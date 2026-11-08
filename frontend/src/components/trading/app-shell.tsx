@@ -122,6 +122,17 @@ function ShortcutsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
   );
 }
 
+/** Shown whenever the API serves invented data, so a recording or screenshot cannot pass for real prices. */
+function DemoDataBanner() {
+  const { data: meta } = useQuery(queries.meta());
+  if (meta?.mode !== "mock") return null;
+  return (
+    <p role="status" className="shrink-0 border-b bg-warning-bg px-3 py-1 text-center text-xs text-warning">
+      Demo data. {meta.note}
+    </p>
+  );
+}
+
 export function AppShell({ startsAsRail, children }: { startsAsRail: boolean; children: ReactNode }) {
   const [commandOpen, setCommandOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -138,6 +149,7 @@ export function AppShell({ startsAsRail, children }: { startsAsRail: boolean; ch
       </a>
       <Sidebar startsAsRail={startsAsRail} />
       <div className="flex min-w-0 flex-1 flex-col">
+        <DemoDataBanner />
         {/* Phones only: the sidebar is hidden there, so the screens are listed here. */}
         <header className="flex shrink-0 items-center border-b bg-canvas px-3 py-2 md:hidden">
           <CompactNav />
