@@ -6,7 +6,8 @@
  * - Spot: Nord Pool spot, a violet line.
  * - Forecast: the P50 made `lead` hours ahead, gold, with the P10-P90 prediction interval as a light band.
  *
- * Under them the balancing direction, see `DirectionPane`: the same forecast's chances and what happened.
+ * Under them the balancing direction, see `DirectionPane`: the same forecast's chances drawn as in the Now
+ * chart, and what happened as a thin strip at the pane's edge.
  */
 import {
   AreaSeries,
@@ -72,7 +73,7 @@ export class HindsightView {
     this.p50 = this.chart.addSeries(LineSeries, { ...line, color: color("series-1"), lineWidth: 2 });
     this.fan = new StepBand({ fill: withAlpha(color("chart-band"), 0.32), shape: "line" });
     this.p50.attachPrimitive(this.fan);
-    this.direction = new DirectionPane(this.chart);
+    this.direction = new DirectionPane(this.chart, "edge");
     this.chart.subscribeCrosshairMove((event) => {
       this.onCross(typeof event.time === "number" ? (this.byTime.get(event.time) ?? null) : null);
     });

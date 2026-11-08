@@ -87,6 +87,38 @@ npx skills add vercel-labs/skills                       # find-skills
 npx skills add jakubkrehel/make-interfaces-feel-better  # make-interfaces-feel-better
 ```
 
+## Final model and results
+
+The submitted model is **`ens_finald`**: a LightGBM structural mixture (three-class regulation
+direction classifier x conditional quantile heads per direction, target = imbalance price minus spot,
+direct multi-horizon over 40 steps), trained as four configurations (ECMWF and MET Nordic weather
+members, each with feature set v4 for steps 9-40 and v9d, which adds Fingrid real-time grid state and
+short-window direction persistence at the origin, for steps 1-8). Each configuration has four bagging
+members (default fit, seed 1, last-7-weeks window, asinh target); the eight lead-time-split members are
+averaged, the P10-P90 band gets validation-fitted per-situation widths, and the spike probabilities
+are averaged 50/50 with the previous chain (`ens_mixgd_spk_bw`). The full reasoning chain, ablations
+and negative results are in [`docs/EVALUATION.md`](docs/EVALUATION.md).
+
+Validation period 7 Sep - 4 Oct 2026, organiser's `score.py` 0.1.1 (schema 1.0, spike margin 50):
+
+| Level 1 metric (lower is better) | Organiser baseline | `ens_finald` |
+|---|---|---|
+| MAE of p50 (EUR/MWh) | 66.20 | **40.98** (-38 %) |
+| Mean pinball loss p10/p90 | 24.18 | **11.31** (-53 %) |
+| P10-P90 coverage (target about 0.80) | 0.683 | 0.819 |
+| Mean Brier, spike high/low | 0.1132 | **0.0873** (-23 %) |
+| Three-class Brier, direction | 0.4509 | **0.3848** (-15 %) |
+
+How it was validated: the validation models are trained only on targets usable before the first
+validation origin (2026-09-06T21:00Z); the band widths are scored leave-one-validation-week-out; the
+spike hedge weight is fixed, not fitted; model choices were made on paired day-block bootstraps of
+these validation scores (`tools/eval/bootstrap_compare.py`). The final models are retrained on targets
+up to 2026-10-04T20:45Z and never see test-period targets; test-period inputs are used only as features
+at test origins under the availability rule (leakage check: `tools/eval/leakage.py`). The submission
+`forecast_backtest.csv` (673 origins x 40 steps) passes `validate_submission.py` 0.1.0 with 0 errors
+and 0 warnings. The previous submission `ens_final` (same chain with v9 / v9m instead of v9d / v9md;
+40.99 / 11.31 / 0.819 / 0.0874 / 0.3852) is the validated fallback.
+
 ## Reproduce the submission
 
 Needs `FINGRID_API_KEY` in `.env` and internet access (Fingrid, Open-Meteo, OpenStreetMap). The

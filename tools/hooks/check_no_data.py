@@ -27,6 +27,8 @@ ALLOWED = [
     "tools/starter_package/sample_submission.csv",
     "tools/starter_package/forecast_origins.csv",
     "tools/starter_package/availability.csv",
+    # presentation slides (deliverable, no data)
+    "docs/slides/*.pdf",
     # our own trained models
     "backend/artifacts/*/*.txt",
     "backend/artifacts/*/meta.json",

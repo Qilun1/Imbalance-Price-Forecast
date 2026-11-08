@@ -9,6 +9,10 @@
  *   edge is drawn white and still marks the chance. Chances hold for a whole quarter-hour, so they are
  *   stepped, and each step takes the colour of its own quarter-hour.
  *
+ * With `happened: "edge"` (Hindsight, where every quarter-hour has both) what happened is a thin strip past
+ * 100 % instead, up above and down below, so the chances look exactly as in the Now chart's forecast: a
+ * pale fill with a solid edge, never broken by bars.
+ *
  * A row after the pane's heading names the values under the crosshair, its swatches the legend for both.
  */
 import {
@@ -32,10 +36,12 @@ import { color, headingStyle, tint, withAlpha } from "./theme";
 
 const QUARTER_HOUR = 900;
 const PRICE_PANE_STRETCH = 2;
-const WHOLE_SCALE = { priceRange: { minValue: -1, maxValue: 1 } };
 /** Share of the pane kept clear of data for its heading, enough to leave air between the two graphs. */
 export const HEADING_SHARE = 0.24;
 const HAPPENED_BARS = { up: { upper: 1, lower: 0 }, down: { upper: 0, lower: -1 } };
+/** The edge strips sit past 100 %, with a gap, so a chance of 100 % still shows its line. */
+const HAPPENED_EDGE = { up: { upper: 1.16, lower: 1.05 }, down: { upper: -1.05, lower: -1.16 } };
+const SCALE = { bars: 1, edge: 1.16 };
 const CHANCE_FILL = 0.35;
 const CHANCE_LINE_WIDTH = 2;
 const WIDEST_CHANCE = "100%";
@@ -118,6 +124,8 @@ function closedSteps(rows: readonly DirectionRow[], value: Value, edge: Edge): (
 
 const below = (value: number | null) => (value === null ? null : -value);
 
+export type HappenedStyle = "bars" | "edge";
+
 export class DirectionPane {
   /** The middle line. It has a point for every row, so the bars keep a scale even when no chances came. */
   private readonly middle: ISeriesApi<"Line">;
@@ -130,12 +138,16 @@ export class DirectionPane {
   private readonly pale: Record<HappenedRun["direction"], string>;
   private readonly surface: string;
 
-  constructor(chart: IChartApi) {
+  constructor(
+    chart: IChartApi,
+    private readonly style: HappenedStyle = "bars",
+  ) {
     this.solid = { up: color("up"), down: color("down") };
     this.surface = color("surface");
     this.pale = { up: tint(this.solid.up, CHANCE_FILL, this.surface), down: tint(this.solid.down, CHANCE_FILL, this.surface) };
     const fill = { up: withAlpha(this.solid.up, CHANCE_FILL), down: withAlpha(this.solid.down, CHANCE_FILL) };
     const percent = { type: "custom", formatter: axisPercent, minMove: 0.01 } as const;
+    const whole = { priceRange: { minValue: -SCALE[style], maxValue: SCALE[style] } };
 
     this.middle = chart.addSeries(
       LineSeries,
@@ -145,7 +157,7 @@ export class DirectionPane {
         priceLineVisible: false,
         lastValueVisible: false,
         crosshairMarkerVisible: false,
-        autoscaleInfoProvider: () => WHOLE_SCALE,
+        autoscaleInfoProvider: () => whole,
         priceFormat: percent,
       },
       1,
@@ -167,7 +179,7 @@ export class DirectionPane {
           bottomFillColor2: fill.down,
           lineWidth: CHANCE_LINE_WIDTH,
           crosshairMarkerVisible: false,
-          autoscaleInfoProvider: () => WHOLE_SCALE,
+          autoscaleInfoProvider: () => whole,
           priceFormat: percent,
         },
         1,
@@ -193,10 +205,13 @@ export class DirectionPane {
     const end = rows.at(-1);
     const close = end ? [{ time: (end.time + QUARTER_HOUR) as UTCTimestamp, value: 0 }] : [];
     this.middle.setData([...rows.map(({ time }) => ({ time, value: 0 })), ...close]);
-    this.happened.set(happenedRuns(rows).map(({ from, to, direction }) => ({ from, to, ...HAPPENED_BARS[direction], fill: this.solid[direction] })));
+    const place = this.style === "edge" ? HAPPENED_EDGE : HAPPENED_BARS;
+    this.happened.set(happenedRuns(rows).map(({ from, to, direction }) => ({ from, to, ...place[direction], fill: this.solid[direction] })));
     // Over a bar of the same direction the chance's own colour would vanish, so its edge turns white there.
-    this.up.setData(closedSteps(rows, (row) => row.pUp, (row) => (row.realised === "up" ? { topLineColor: this.surface } : {})));
-    this.down.setData(closedSteps(rows, (row) => below(row.pDown), (row) => (row.realised === "down" ? { bottomLineColor: this.surface } : {})));
+    // Edge strips never lie under a chance, so the edge keeps its colour.
+    const bars = this.style === "bars";
+    this.up.setData(closedSteps(rows, (row) => row.pUp, (row) => (bars && row.realised === "up" ? { topLineColor: this.surface } : {})));
+    this.down.setData(closedSteps(rows, (row) => below(row.pDown), (row) => (bars && row.realised === "down" ? { bottomLineColor: this.surface } : {})));
   }
 
   /** The swatches explain the pane: pale for the chances, solid for the bars of what happened. */
