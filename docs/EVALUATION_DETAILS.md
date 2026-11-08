@@ -2,7 +2,7 @@
 
 This is the long version. The short report the jury should read first is [EVALUATION.md](EVALUATION.md).
 
-Team WeatherSensAI, Since AI 2026, Turku Energia challenge. Submission: `ens_finald` (eight structural
+Team KODA, Since AI 2026, Turku Energia challenge. Submission: `ens_finald` (eight structural
 mixture members: two weather sources x four bagging variants, each split by lead time with the
 real-time grid state and short-window direction persistence for the first 2 h; bands and spike
 probabilities read from one consistent mixture) with situation-dependent band widths and the spike

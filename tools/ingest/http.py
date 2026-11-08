@@ -9,7 +9,7 @@ from pathlib import Path
 
 import requests
 
-USER_AGENT = "WeatherSensAI-SinceAI2026-imbalance/0.1 (hackathon research)"
+USER_AGENT = "KODA-SinceAI2026-imbalance/0.1 (hackathon research)"
 
 
 class DailyLimit(RuntimeError):

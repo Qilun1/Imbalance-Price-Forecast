@@ -1,6 +1,6 @@
 # Imbalance Price Forecast: Since AI 2026, Turku Energia challenge
 
-**Team WeatherSensAI**: Atte Laakso (data pipeline, features, models, evaluation) and Qilun Li
+**Team KODA**: Atte Laakso (data pipeline, features, models, evaluation) and Qilun Li
 (dashboard, API, alerts, slides, video). Built 6-8 Nov 2026 at the Since AI hackathon in Turku;
 submitted 8 Nov 2026 10:00 EET. Coding agents (Claude) were used throughout; `AGENTS.md` holds the
 rules they worked under.

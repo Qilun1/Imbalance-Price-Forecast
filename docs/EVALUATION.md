@@ -1,6 +1,6 @@
 # Evaluation report: 10-hour Finnish imbalance price forecast
 
-Team WeatherSensAI, Since AI 2026, Turku Energia challenge. Submission `ens_finald`
+Team KODA, Since AI 2026, Turku Energia challenge. Submission `ens_finald`
 (`forecast_backtest.csv`, 673 origins x 40 steps = 26,920 rows; `validate_submission.py` 0 errors,
 0 warnings). All scores are from the organiser's `score.py` on the validation period 7 Sep - 4 Oct
 2026 (26,700 scored rows), from models trained only on targets usable before the first validation

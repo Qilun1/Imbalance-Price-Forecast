@@ -1,6 +1,6 @@
 # Data sources, services and components
 
-Team WeatherSensAI, Since AI 2026, Turku Energia challenge. Checked on 7 Nov 2026 against each
+Team KODA, Since AI 2026, Turku Energia challenge. Checked on 7 Nov 2026 against each
 provider's terms (links below). The submitted forecast is `ens_finald`: the mean of eight bagged,
 lead-time-split structural mixture models, ECMWF (`mix_v9db` for steps 1-8, `mix_v4b` after) and MET
 Nordic (`mix_v9mdb` for steps 1-8, `mix_v4mb` after), four bagging members each, with one band width
