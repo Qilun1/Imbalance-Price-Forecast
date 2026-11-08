@@ -70,7 +70,7 @@ export const SHORTCUTS: readonly { keys: string; action: string }[] = [
   { keys: "Shift + ← →", action: "One day back or forward" },
   { keys: "L", action: "Back to the latest forecast" },
   { keys: "R", action: "Replay a past moment hour by hour, or pause" },
-  { keys: "1 2 3", action: "Now, Next 10 h, Hindsight" },
+  { keys: "1 2 3 4", action: "Now, Next 10 h, Hindsight, API" },
   { keys: "F6", action: "Move between panels" },
   { keys: "Ctrl + K", action: "Command menu" },
   { keys: "?", action: "This list" },

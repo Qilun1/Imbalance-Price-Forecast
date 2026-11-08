@@ -59,11 +59,12 @@ Browser tests use the installed Microsoft Edge, so no browser download is needed
 | `/` | Price history and what to check now, key figures, and the imbalance price and forecast chart with the spot price and balancing direction |
 | `/next-10h` | Every quarter-hour in a table, and the Exposure check |
 | `/hindsight` | Scores against the baseline and forecast vs actual, with past situations and the official scores in a side box |
+| `/api-guide` | How to pull the data from the API once it runs in real mode |
 | `/dev/ui` | Hidden. Every primitive in every state |
 
 The viewing time is in the URL as `?as_of=<UTC>`, so a moment in the past can be shared as a link. The
-`←` and `→` keys step one hour, `R` replays a past moment, `L` returns to the latest forecast, and `?` lists
-every shortcut.
+`←` and `→` keys step one hour, `R` replays a past moment, `L` returns to the latest forecast, `1` to `4` switch
+screens, and `?` lists every shortcut.
 
 Add `?fault=slow`, `loading`, `error`, `offline` or `empty` to a URL to see a panel state. This works under
 `npm run dev`, and in a build made with `NEXT_PUBLIC_API_FAULTS=on`.
