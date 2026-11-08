@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Factory, History, type LucideIcon, PanelLeftClose, PanelLeftOpen, Table2 } from "lucide-react";
+import { Activity, Braces, Factory, History, type LucideIcon, PanelLeftClose, PanelLeftOpen, Table2 } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -18,6 +18,7 @@ export const SCREENS: readonly { href: string; label: string; icon: LucideIcon }
   { href: "/next-10h", label: "Next 10 h", icon: Table2 },
   { href: "/hindsight", label: "Hindsight", icon: History },
   { href: "/operator", label: "Naantali CHP", icon: Factory },
+  { href: "/api-guide", label: "API", icon: Braces },
 ];
 
 const SPRING = { type: "spring", stiffness: 500, damping: 40 } as const;

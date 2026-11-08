@@ -2,7 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 
 const SPIKE = "2026-10-23T09:00:00Z"; // scripted in backend/api/mock.py
-const SCREENS = ["/", "/next-10h", "/hindsight", "/operator"];
+const SCREENS = ["/", "/next-10h", "/hindsight", "/operator", "/api-guide"];
 
 test.beforeAll(async ({ request }) => {
   const meta = await (await request.get("/api/meta")).json();
@@ -216,6 +216,21 @@ test("a key figure shows its time in the chart, and pressing it again lets go", 
   await highest.click();
   await expect(highest).toHaveAttribute("aria-pressed", "false");
   await expect(time).toHaveText("23 Oct 09:00");
+});
+
+test("the API page says how to pull from the API", async ({ page }) => {
+  await page.goto(`/?as_of=${SPIKE}`);
+  await expect(page.getByRole("button", { name: /Worth an expert review/ })).toBeVisible();
+  await page.getByRole("main").click({ position: { x: 4, y: 4 } });
+  await page.keyboard.press("4");
+  await expect(page.getByRole("heading", { name: "API", level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/api-guide\?as_of=2026-10-23T09/);
+
+  await expect(page.getByText("Serving", { exact: false })).toHaveCount(0);
+  const pull = page.getByRole("region", { name: "Pull the data" });
+  await expect(pull.locator("tbody tr")).toHaveCount(4);
+  await expect(pull.locator("pre")).toContainText("Format-Table delivery_start_utc, p10, p50, p90");
+  await expect(pull.locator("pre")).not.toContainText("spot");
 });
 
 test("a viewing time outside the data offers a way back", async ({ page }) => {

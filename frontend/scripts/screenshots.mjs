@@ -22,7 +22,7 @@ function option(name, fallback) {
   return index > -1 ? process.argv[index + 1] : fallback;
 }
 
-const SCREENS = { now: "/", next: "/next-10h", hindsight: "/hindsight" };
+const SCREENS = { now: "/", next: "/next-10h", hindsight: "/hindsight", api: "/api-guide" };
 const STATES = { populated: "", loading: "fault=loading", empty: "fault=empty", error: "fault=error", offline: "fault=offline" };
 const HEIGHTS = { 768: 1024, 1280: 800, 1440: 900, 1920: 1080 };
 
