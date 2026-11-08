@@ -142,7 +142,7 @@ function Review({ alert }: { alert: Alert }) {
             </Section>
           ) : null}
           {alert.drivers.length ? (
-            <Section title="Main factors">
+            <Section title="Drivers of the regulation direction">
               <ul className="list-inside list-disc text-sm text-ink">
                 {alert.drivers.map((driver) => (
                   <li key={driver.id}>{driver.label}</li>
